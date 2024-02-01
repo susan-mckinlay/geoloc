@@ -25,6 +25,62 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
 from cycler import cycler
 from matplotlib.legend import Legend
+import geopy.distance
+import warnings
+
+# Fixing the progressive number colum
+def fix_prog_tot_col(data):
+    prog_tot = 0
+    list_prog = [ ]
+    for idx, row in data.iterrows():
+        prog_tot += 1
+        list_prog.append(prog_tot)
+    data['prog_number'] = list_prog
+    return data
+
+def calculate_distance(cA, cB):
+    """
+    :param cA : pair of point A (long, lat)
+    :param cB : pair of point B (log, lat)
+    :return distance in Km
+    """
+    return geopy.distance.geodesic(cA, cB).km
+
+def add_distance_in_dataframe(group):
+    """
+    add distance field in the dataframe.
+    returns a dataframe with the distance field
+    """
+    distance = 0
+    array_dist = []
+    i = 0
+    for _, row in group.iterrows():
+        if i == 0:
+            # first instance
+            prev_c = (row['modelat'], row['modelon'])
+            current_c = prev_c
+        else:
+            current_c = (row['modelat'], row['modelon'])
+        distance = calculate_distance(prev_c, current_c)
+        array_dist.append(distance)
+        prev_c = current_c
+        i += 1
+    group['distance'] = array_dist
+    return group
+
+def calculate_avrg_migr_dep(data, season):
+    """
+    It takes the dataframe with all the locations with their corresponding time, it converts it to julian date and calculates
+    the mean of the departure date of migration
+    """
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['complete_migr'] == 1)] #(data['Juv'] == 1) & 
+    data['date_time_dt'] = data['date_time'].dt.date
+    remove_nat_values = data.loc[~data.date_time_dt.isnull()]
+    #print('remove nat values\n',remove_nat_values)
+    start_migr = remove_nat_values.groupby('ID')['date_time_dt'].first().reset_index()
+    print('start_migr\n', start_migr)
+    start_migr['julian_day_start_migr'] = start_migr['date_time_dt'].apply(lambda x: (x.timetuple().tm_yday) % 365)
+    print(f'mean departure {season} migration\n', start_migr['julian_day_start_migr'].mean())
 
 def setting_up_the_map(ax):
     fname = os.path.join('/Users/susanellenmckinlay/Documents/python/woodcock/input_files/tif_files/', 'HYP_HR_SR_W.tif')
@@ -44,7 +100,7 @@ def setting_up_the_map(ax):
     grid_lines.yformatter = LATITUDE_FORMATTER
     return ax
 
-def all_birds_map(data, save_fig):
+def all_birds_map(data, save_fig, season):
     plt.figure(figsize=(30,10))
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
@@ -65,53 +121,54 @@ def all_birds_map(data, save_fig):
                 y = country.geometry.centroid.y
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     # Drop NaN values in modelat and modelon columns
-    #df = df.dropna(subset=["id"])
     data = data.dropna(subset = ['modelat','modelon'])
-    data = data.loc[(data['Juv'] == 1) & (data['compl_spr_track'] == 1) & (data['season'] == 'spr')\
-    & (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)] #& (data['complete_migr'] == 1)]
+    #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['ID'].unique()
     print('total number of birds is', len(bird_id))
-    print('first longitude of 5IK\n',data.loc[(data['ID'] == "5IK"), 'modelon'].iloc[0])
     # I need to choose a proper set of colors
     ax.set_prop_cycle('color',plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
     for bird in bird_id:
         try:
             x = data.loc[(data['ID'] == bird), 'modelon']
             y = data.loc[(data['ID'] == bird), 'modelat']
-            x2 = data.loc[(data['ID'] == bird), 'modelon'].iloc[0]
-            y2 = data.loc[(data['ID'] == bird), 'modelat'].iloc[0]
             ax.plot(x,y,'-', transform=ccrs.PlateCarree(), linewidth = 1.5, label = bird) # to use dictionary for colors: , color = colors[bird]
             ax.plot(x,y,'.',transform=ccrs.PlateCarree(), label = bird, c = 'black', zorder = 1)
-            ax.plot(x2,y2,'.',transform=ccrs.PlateCarree(), label = bird, c = 'red', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
     plt.legend(fontsize='small', loc="upper left")
     plt.savefig('output_files/images/'+save_fig+'.png', dpi=500, format='jpg', bbox_inches="tight")
     plt.show()
 
-
 def main():
     if len(sys.argv) < 1:
-        exit('python3.10 os/start_mapping.py input_files/tracks.csv')
+        exit('python3.9 os/start_mapping_dist.py input_files/tracks.csv input_files/individuals.xlsx')
     pd.set_option('display.max_rows', None)
+    warnings.filterwarnings("ignore")
     data = pd.read_csv(sys.argv[1], sep = ';', na_values = ['NA','a'], decimal=',')
     data['date_time'] = pd.to_datetime(data['date_time'])
-    # replace NA string with NaN values so that I can convert the whole column to integer values
-    # Replace on all selected columns
-    # df2 = df.replace(r'^\s*$', np.nan, regex=True)
-    # df['Courses'] = df['Courses'].replace('Spark','Apache Spark')
     data['modelat'] = data['modelat'].replace('NA', np.nan, regex=True)
     data['modelon'] = data['modelon'].replace('NA', np.nan, regex=True)
     data['modelat'] = data['modelat'].astype(float)
     data['modelon'] = data['modelon'].astype(float)
-    data = data.sort_values(by = ['date_time'])
-    # new_df = new_df.sort_values(by = ['date'])
-    #print('type column modelon',data['modelon'].dtype, type(data['modelon'].iloc[4]))
-    #print('type column modelat',data['modelat'].dtype, type(data['modelat'].iloc[4]))
-    #print('first longitude of 5IK\n',data.loc[(data['ID'] == "5IK"), 'modelon'].iloc[0])
-    all_birds_map(data, '5IK_spring_juv_non_stationary_migration_map')
-
+    data = data.sort_values(by = ['ID','date_time'])
+    individuals = pd.read_excel(sys.argv[2])
+    # The juveniles don't have column['repeated'] == 1 in the file individuals.xlsx
+    indiv_compl_migr = list(individuals.loc[individuals['repeated'] == 1, 'ID'])
+    print('individuals with complete migration\n', indiv_compl_migr)
+    data['complete_migr'] = np.where(data['ID'].isin(indiv_compl_migr), 1, 0)
+    data = fix_prog_tot_col(data)
+    data = data.dropna(subset = ['modelat','modelon'])
+    calculate_avrg_migr_dep(data, 'aut')
+    d = {}
+    for name, group in data.groupby(['ID','year']):
+        d['group_' + str(name)] = group  # group is a dataframe containing information about ONLY ONE BIRD
+        group = add_distance_in_dataframe(group)
+    new_df = pd.DataFrame([])
+    for key in d:
+        new_df = new_df.append(d[key])
+    all_birds_map(data, 'spr_juv_non_stationary_migration_map', 'spr')
 
 
 if __name__ == "__main__":
