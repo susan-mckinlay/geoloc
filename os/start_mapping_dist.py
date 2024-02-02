@@ -73,14 +73,31 @@ def calculate_avrg_migr_dep(data, season):
     It takes the dataframe with all the locations with their corresponding time, it converts it to julian date and calculates
     the mean of the departure date of migration
     """
-    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['complete_migr'] == 1)] #(data['Juv'] == 1) & 
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) &\
+        (data[f'adults_{season}_compl_migr'] == 1) & (data['Juv'] == 0)]
     data['date_time_dt'] = data['date_time'].dt.date
     remove_nat_values = data.loc[~data.date_time_dt.isnull()]
     #print('remove nat values\n',remove_nat_values)
     start_migr = remove_nat_values.groupby('ID')['date_time_dt'].first().reset_index()
-    print('start_migr\n', start_migr)
+    #print('start_migr\n', start_migr)
     start_migr['julian_day_start_migr'] = start_migr['date_time_dt'].apply(lambda x: (x.timetuple().tm_yday) % 365)
     print(f'mean departure {season} migration\n', start_migr['julian_day_start_migr'].mean())
+
+def get_adults_with_compl_migr(data, individuals):
+    # First get adults with column 'repeated' == 1 (not sure what it means and it's probably useless anyway)
+        # The juveniles don't have column['repeated'] == 1 in the file individuals.xlsx
+    repeated = list(individuals.loc[individuals['repeated'] == 1, 'ID'])
+    print('individuals with complete migration\n', repeated)
+    data['repeated'] = np.where(data['ID'].isin(repeated), 1, 0)
+    adults_aut = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'CH')\
+        & (individuals['compl_aut_track']) & (individuals['Juv'] == 0), 'ID'])
+    print('list of adults with complete autumn migration\n',adults_aut, len(adults_aut))
+    data['adults_aut_compl_migr'] = np.where(data['ID'].isin(adults_aut), 1, 0)
+    adults_spr = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'CH')\
+        & (individuals['compl_spr_track']) & (individuals['Juv'] == 0), 'ID'])
+    data['adults_spr_compl_migr'] = np.where(data['ID'].isin(adults_spr), 1, 0)
+    print('list of adults with complete sring migration\n',adults_spr, len(adults_spr))
+    return data
 
 def setting_up_the_map(ax):
     fname = os.path.join('/Users/susanellenmckinlay/Documents/python/woodcock/input_files/tif_files/', 'HYP_HR_SR_W.tif')
@@ -105,7 +122,7 @@ def all_birds_map(data, save_fig, season):
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
     # Set the background of the map
-    ax.set_extent((-20.0, 23.0, 55.0, 0.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    ax.set_extent((-20.0, 43.0, 55.0, -33.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -113,7 +130,7 @@ def all_birds_map(data, save_fig, season):
     reader = shpreader.Reader(shpfilename)
     # Add names of some countries on map
     countries = reader.records()
-    list_countries = ['Ukraine', 'Germany', 'Lithuania', 'Kazakhstan']
+    list_countries = ['Ukraine', 'Germany', 'Libya']
     for country in countries:
         for i in list_countries:
             if country.attributes['NAME'] == i:
@@ -122,7 +139,7 @@ def all_birds_map(data, save_fig, season):
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     # Drop NaN values in modelat and modelon columns
     data = data.dropna(subset = ['modelat','modelon'])
-    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)] #& (data['complete_migr'] == 1)]
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1) & (data['Juv'] == 0)]
     #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['ID'].unique()
@@ -154,13 +171,10 @@ def main():
     data['modelon'] = data['modelon'].astype(float)
     data = data.sort_values(by = ['ID','date_time'])
     individuals = pd.read_excel(sys.argv[2])
-    # The juveniles don't have column['repeated'] == 1 in the file individuals.xlsx
-    indiv_compl_migr = list(individuals.loc[individuals['repeated'] == 1, 'ID'])
-    print('individuals with complete migration\n', indiv_compl_migr)
-    data['complete_migr'] = np.where(data['ID'].isin(indiv_compl_migr), 1, 0)
+    data = get_adults_with_compl_migr(data, individuals)
     data = fix_prog_tot_col(data)
     data = data.dropna(subset = ['modelat','modelon'])
-    calculate_avrg_migr_dep(data, 'aut')
+    calculate_avrg_migr_dep(data, 'spr')
     d = {}
     for name, group in data.groupby(['ID','year']):
         d['group_' + str(name)] = group  # group is a dataframe containing information about ONLY ONE BIRD
@@ -168,7 +182,8 @@ def main():
     new_df = pd.DataFrame([])
     for key in d:
         new_df = new_df.append(d[key])
-    all_birds_map(data, 'spr_juv_non_stationary_migration_map', 'spr')
+    season = 'spr'
+    #all_birds_map(data, f'{season}_ad_non_stationary_migration_map', season)
 
 
 if __name__ == "__main__":
