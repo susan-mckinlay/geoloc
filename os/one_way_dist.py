@@ -53,18 +53,23 @@ def random_loc_on_track(data, tot_dist_migr, season):
     # For-loop to get column with number of random locations corresponding to each distance row
     dist = 246
     res_list = []
+    dist_rand_loc_list = []
     km_left = 0
     i = 0
     for _, row in data_3cx.iterrows():
         print('km left at the beginning of the for loop', km_left)
         if km_left <= dist:
             if  (i == 0) & (row['distance'] >= dist):
+                # The distance here will always be more than the dist value, so here I will never append 0
+                # to res_list
                 res = row['distance']//dist
                 print('We are in the if of the if-else statement')
                 print('the current distance is:', row['distance'])
                 print('the current result row[distance]/dist is:', res)
                 # append N of random locations that are allowed per segment to list, to add it later as a column
                 res_list.append(res)
+                # only append N random locations here because it's the first instance of the for loop
+                dist_rand_loc_list.append(res)
                 # Find how many km remain 
                 remainder = row['distance'] % dist
                 # Store remaining km
@@ -74,27 +79,31 @@ def random_loc_on_track(data, tot_dist_migr, season):
             else: # instance when row['distance'] < dist
                 print("We are in the else of the if-else statement")
                 print('The current row[distance] is:', row['distance'], f'it should be less than {dist} on the day', row['date_time'])
-                # Append 0 random locations because the segment is too short (row['distance'] < dist)
-                #res_list.append(0)
                 # Add the segment that is too short to remaining km 
                 km_left += row['distance']
-                if km_left >= dist:
+                if km_left >= dist: # if km_left is divisable by dist then append res to res_list
+                    print("Im here because row['distance'] < dist, I added it to km_left and then km_left became >= dist, so I km_left/dist")
                     res = km_left//dist
+                    print("and this is the res:", res, "and these are the km_left", km_left)
+                    rand_loc_dist = km_left - (dist * res) # so that I get the rand_loc_dist of the first
+                    # random location
+                    dist_rand_loc_list.append(round(rand_loc_dist, 2))
                     res_list.append(res)
                     remainder = km_left % dist
                     # Reset km_left to 0
                     km_left = 0
                     km_left += remainder
                 else:
-                    # Append 0 random locations because the segment is too short (row['distance'] < dist)
+                    # Append 0 random locations because km_left is still < dist
                     res_list.append(0)
-                # The probelm is that is km_left >= dist here then I should add res to res_list immediately!
+                    dist_rand_loc_list.append(0)
                 print('The km left are:', km_left)
-        else:
+        else: # We are here when already at the beginning of the for loop km_left >= dist
             # append N of random locations that are allowed per segment to list, to add it later as a column
-            #res = row['distance']//dist
             print('Here Im in the else of the outer if-else statement' )
             res = km_left//dist
+            rand_loc_dist = km_left - (dist * res)
+            dist_rand_loc_list.append(round(rand_loc_dist), 2)
             res_list.append(res)
             remainder = km_left % dist
             # Reset km_left to 0
@@ -104,6 +113,7 @@ def random_loc_on_track(data, tot_dist_migr, season):
             print('the current result km_left/dist is:', res, 'in the else of the outer if-else statement')
             print('the current remainder km_left/dist is:', remainder, 'in the else of the outer if-else statement')
     print(res_list, len(res_list), sum(res_list))
+    print(dist_rand_loc_list, len(dist_rand_loc_list), sum(dist_rand_loc_list))
 
 def main():
     if len(sys.argv) < 1:
