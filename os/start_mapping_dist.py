@@ -183,6 +183,7 @@ def main():
     for key in d:
         new_df = new_df.append(d[key])
     season = 'spr'
+    new_df.to_csv(sys.argv[3],index = False)
     #all_birds_map(data, f'{season}_ad_non_stationary_migration_map', season)
 
 
