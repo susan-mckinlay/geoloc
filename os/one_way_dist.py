@@ -28,6 +28,7 @@ from matplotlib.legend import Legend
 import geopy.distance
 import warnings
 from pyproj import Geod
+from geographiclib.geodesic import Geodesic
 
 def calc_dist_each_rand_loc(data, season):
     tot_dist_migr = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)].groupby('ID')['distance'].sum().reset_index()
@@ -39,14 +40,16 @@ def calc_dist_each_rand_loc(data, season):
 
 def random_loc_on_track(data, tot_dist_migr, season):
     data_3cx = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season)\
-         & (data['Juv'] == 1) & (data['ID'] == '5LK') & (data['distance'] != 0)]
+         & (data['Juv'] == 1) & (data['ID'] == '5LK')] #& (data['distance'] != 0)]
+    # Remove modelat and modelon duplicates
+    data_3cx = data_3cx.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     data_3cx_lat = data_3cx['modelat']
     data_3cx_lon = data_3cx['modelon']
     dist_rand_loc_3cx = tot_dist_migr.loc[tot_dist_migr['ID'] == '5LK', 'dist_rand_loc']
     print('total distance 5II',dist_rand_loc_3cx, len(data_3cx_lat))
     #geoid = Geod(ellps="WGS84")
     #extra_points = geoid.inv_intermediate(data_3cx_lon.iloc[8], data_3cx_lat.iloc[8], \
-        #data_3cx_lon.iloc[9], data_3cx_lat.iloc[9], del_s = 350)
+    #data_3cx_lon.iloc[9], data_3cx_lat.iloc[9], del_s = 350)
     #print(extra_points)
     # I need to fix the values of 5II, res_list has 19 integers instead of 20, I think because of
     # a rounding ERROR
@@ -69,7 +72,7 @@ def random_loc_on_track(data, tot_dist_migr, season):
                 # append N of random locations that are allowed per segment to list, to add it later as a column
                 res_list.append(res)
                 # only append N random locations here because it's the first instance of the for loop
-                dist_rand_loc_list.append(res)
+                dist_rand_loc_list.append(dist)
                 # Find how many km remain 
                 remainder = row['distance'] % dist
                 # Store remaining km
@@ -114,6 +117,45 @@ def random_loc_on_track(data, tot_dist_migr, season):
             print('the current remainder km_left/dist is:', remainder, 'in the else of the outer if-else statement')
     print(res_list, len(res_list), sum(res_list))
     print(dist_rand_loc_list, len(dist_rand_loc_list), sum(dist_rand_loc_list))
+    data_3cx['number_locations'] = res_list
+    data_3cx['distance_locations'] = dist_rand_loc_list
+    return data_3cx
+
+def get_lat_lon_rand_loc(data_3cx):
+    data_3cx = data_3cx.iloc[-6:-4]
+    #Define the ellipsoid
+    geod = Geodesic.WGS84
+    i = 0
+    res_list = []
+    for _, row in data_3cx.iterrows():
+        #if data_3cx['number_locations'] == 0:
+            #res_list.append(0)
+        #else:
+            #for n in range(data_3cx['number_locations']):
+                #if i == 0:
+                    #prev_c = (row['modelon'], row['modelat'])
+                    #current_c = (row['modelon', i+1], row['modelat', i+1])
+                #else:
+                    #current_c = (row['modelon'], row['modelat'])
+        #Solve the Inverse problem
+        if i == 0:
+            prev_c = (row['modelon'], row['modelat'])
+            current_c = prev_c
+        else:
+            current_c = (row['modelon'], row['modelat'])
+        print('prev_c', prev_c, type(prev_c))
+        print('current_c', current_c)
+        inv = geod.Inverse(prev_c[0], prev_c[1], current_c[0], current_c[1])
+        azi1 = inv['azi1']
+        print('Initial Azimuth from A to B = ' + str(azi1))
+        i += 1
+        prev_c = current_c
+        #Solve the Direct problem
+        print('row[distance_locations]', row['distance_locations'])
+        dir = geod.Direct(prev_c[0],prev_c[1],azi1,row['distance_locations'])
+        C = (dir['lat2'],dir['lon2'])
+        print('C = ' + str(C))
+
 
 def main():
     if len(sys.argv) < 1:
@@ -123,7 +165,9 @@ def main():
     data = pd.read_csv(sys.argv[1])
     data['date_time'] = pd.to_datetime(data['date_time'])
     tot_dist_migr = calc_dist_each_rand_loc(data, 'spr')
-    random_loc_on_track(data, tot_dist_migr, 'spr')
+    data_3cx = random_loc_on_track(data, tot_dist_migr, 'spr')
+    data_3cx.to_csv(sys.argv[2], index = False)
+    get_lat_lon_rand_loc(data_3cx)
 
 
 
