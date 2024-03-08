@@ -29,6 +29,9 @@ import geopy.distance
 import warnings
 from pyproj import Geod
 from geographiclib.geodesic import Geodesic
+import math 
+from geopy.distance import Point
+from geopy.distance import geodesic
 
 def calc_dist_each_rand_loc(data, season):
     tot_dist_migr = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)].groupby('ID')['distance'].sum().reset_index()
@@ -39,15 +42,6 @@ def calc_dist_each_rand_loc(data, season):
     return tot_dist_migr
 
 def random_loc_on_track(data, tot_dist_migr, season):
-    data_3cx = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season)\
-         & (data['Juv'] == 1) & (data['ID'] == '5LK')] #& (data['distance'] != 0)]
-    # Remove modelat and modelon duplicates
-    data_3cx = data_3cx.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
-    data_3cx_lat = data_3cx['modelat']
-    data_3cx_lon = data_3cx['modelon']
-    dist_rand_loc_3cx = tot_dist_migr.loc[tot_dist_migr['ID'] == '5LK', 'dist_rand_loc']
-    print('total distance 5II',dist_rand_loc_3cx, len(data_3cx_lat))
-    print('last index of df', data_3cx.index[-1], data_3cx.index[0], len(data_3cx))
     #geoid = Geod(ellps="WGS84")
     #extra_points = geoid.inv_intermediate(data_3cx_lon.iloc[8], data_3cx_lat.iloc[8], \
     #data_3cx_lon.iloc[9], data_3cx_lat.iloc[9], del_s = 350)
@@ -55,27 +49,38 @@ def random_loc_on_track(data, tot_dist_migr, season):
     # I need to fix the values of 5II, res_list has 19 integers instead of 20, I think because of
     # a rounding ERROR
     # For-loop to get column with number of random locations corresponding to each distance row
+    # Strategy:
+    # 1. Create a column with number of random locations per segment (at the second row for each pair of coordinates)
+    # 2. If the segment is long enough to be divided by the distance (= tot_length_migration/20) divide it and append that number
+    # to res_list
+    # 3. If the segment is not long enough to be divided by the dist., then append (0) and add the segment to km_left
+    # 4. When km_left >= dist then divided it by dist and append the result to res_list
+    # 5. Res_list should be the same lengtha as the dataframe, with 0s and integer numbers
     dist = 246
     res_list = []
     dist_rand_loc_list = []
     km_left = 0
     i = 0
-    for _, row in data_3cx.iterrows():
+    for _, row in data.iterrows():
         print('km left at the beginning of the for loop', km_left)
         if km_left <= dist:
-            if  (i == 0) & (row['distance'] >= dist):
+            if  row['distance'] >= dist: #(i == 0) & 
                 # The distance here will always be more than the dist value, so here I will never append 0
                 # to res_list
-                res = row['distance']//dist
+                # Add km_left to row['distance'] to take them into account
+                res = (row['distance'] + km_left)//dist
                 print('We are in the if of the if-else statement', i)
                 print('the current distance is:', row['distance'])
                 print('the current result row[distance]/dist is:', res)
                 # append N of random locations that are allowed per segment to list, to add it later as a column
                 res_list.append(res)
-                # only append N random locations here because it's the first instance of the for loop
-                dist_rand_loc_list.append(dist)
+                if km_left == 0: # usually at the start of the df
+                    dist_rand_loc_list.append(dist)
+                else:
+                    rand_loc_dist = (km_left + row['distance']) - (dist * res)
+                    dist_rand_loc_list.append(round(rand_loc_dist, 2))
                 # Find how many km remain 
-                remainder = row['distance'] % dist
+                remainder = (row['distance'] + km_left) % dist
                 # Store remaining km
                 km_left += remainder
                 print('The current remainder is:', remainder, 'The km left are:', km_left)
@@ -104,9 +109,11 @@ def random_loc_on_track(data, tot_dist_migr, season):
         else: # We are here when already at the beginning of the for loop km_left >= dist
             # append N of random locations that are allowed per segment to list, to add it later as a column
             print('Here Im in the else of the outer if-else statement', i )
+            print('current row[distance]', row['distance'],'km_left:',km_left)
             res = km_left//dist
             rand_loc_dist = km_left - (dist * res)
-            dist_rand_loc_list.append(round(rand_loc_dist), 2)
+            print('random location distance:', rand_loc_dist)
+            dist_rand_loc_list.append(round(rand_loc_dist, 2))
             res_list.append(res)
             remainder = km_left % dist
             # Reset km_left to 0
@@ -117,10 +124,10 @@ def random_loc_on_track(data, tot_dist_migr, season):
             print('the current remainder km_left/dist is:', remainder, 'in the else of the outer if-else statement')
         i += 1
     print(res_list, len(res_list), sum(res_list))
-    print(dist_rand_loc_list, len(dist_rand_loc_list), sum(dist_rand_loc_list))
-    data_3cx['number_locations'] = res_list
-    data_3cx['distance_locations'] = dist_rand_loc_list
-    return data_3cx
+    print(dist_rand_loc_list) # len(dist_rand_loc_list), sum(dist_rand_loc_list))
+    data['number_locations'] = res_list
+    data['distance_locations'] = dist_rand_loc_list
+    return data
 
 def get_coords_from_dist_and_segment(prev_c, current_c, dist):
     #Define the ellipsoid
@@ -142,22 +149,20 @@ def get_coords_multiple_random_loc(prev_c, current_c, dist, numb_loc):
         C = get_coords_from_dist_and_segment(prev_c, current_c, dist)
         prev_c = C
 
-def get_lat_lon_rand_loc(data_3cx):
+def get_lat_lon_rand_loc(data):
     # Strategy:
     # 1. Iterate over dataframe;
     # 2. If the number of locations in the seegment equals 0 then append 0 to res_list
     # 3. If the number of locations in the segment equals 1 then append the coordinates of that random location
     # 4. If the number of locations in the segment > 1 then get the coordinates of each random location
-    # I NEED TO FIX THE LAST INSTANCE OF THIS FOR-LOOP
-    print('last index of df', data_3cx.index[-1], data_3cx.index[0], len(data_3cx), data_3cx.index, len(data_3cx.index))
     i = 0
     res_list = []
     dist_tot = 246
     # PROBLEM TO FIX: FIRST COORDINATE OF DF SHOULD NOT BE DISCARDED, IT SHOULD BE USEDAS PREV_C IN SECOND INSTANCE
-    for index, row in data_3cx.iterrows():
+    for index, row in data.iterrows():
         if (row['number_locations'] == 0) & (i==0): # first instance
             res_list.append(0)
-            prev_c = (row['modelon'], row['modelat'])
+            prev_c = (row['modelat'], row['modelon']) # First coordinates of df need to be used
             #current_c = (data_3cx['modelon'].at[index+1], data_3cx['modelat'].at[index+1])
             print('first instance', i, index)
         elif row['number_locations'] == 0:
@@ -167,26 +172,38 @@ def get_lat_lon_rand_loc(data_3cx):
         elif row['number_locations'] == 1:
             #prev_c = (row['modelon'], row['modelat'])
             #current_c = (data_3cx['modelon'].at[index+1], data_3cx['modelat'].at[index+1])
-            current_c = (row['modelon'], row['modelat'])
+            current_c = (row['modelat'], row['modelon'])
             print('prev_c', prev_c, 'instance number:', i, 'the index is:', index)
             print('current_c', current_c)
             dist = row['distance_locations']
-            C = get_coords_from_dist_and_segment(prev_c, current_c, dist)
+            bearing = calculate_initial_compass_bearing(prev_c,current_c)
+            C = Point(geodesic(kilometers=dist).destination(Point(prev_c[0], prev_c[1]), bearing))#.format_decimal()
+            list_c = [float(C[0]), float(C[1])]
+            C = tuple(list_c)
             res_list.append(C)
             prev_c = current_c
         else:
             # Make a separate function here
+            #coords_list = []
             j = 0
             for n in range(int(row['number_locations'])):
                 if j == 0: # first instance
                     # Here the prev_c is the very first row of the df, from the first if statement of the for loop
-                    current_c = (row['modelon'], row['modelat'])
+                    current_c = (row['modelat'], row['modelon'])
                     #current_c = (data_3cx['modelon'].at[index+1], data_3cx['modelat'].at[index+1])
                     print('instance number:', i, 'the index is:', index)
                     print('prev_c in the nested for loop in the if statement', prev_c, row['number_locations'])
                     print('current_c in the nested for loop in the if statement', current_c, row['number_locations'])
                     dist = row['distance_locations']
-                    C = get_coords_from_dist_and_segment(prev_c, current_c, dist)
+                    print('distance to calculate coordinates:', dist)
+                    #C = get_coords_from_dist_and_segment(prev_c, current_c, dist)
+                    # I need to make C a tuple
+                    bearing = calculate_initial_compass_bearing(prev_c,current_c)
+                    C = Point(geodesic(kilometers=dist).destination(Point(prev_c[0], prev_c[1]), bearing))#.format_decimal()
+                    list_c = [float(C[0]), float(C[1])]
+                    C = tuple(list_c)
+                    print('C:', C, type(C))
+                    #coords_list.append(C)
                     res_list.append(C)
                     prev_c = C # the new random point becomes the previous coordinate
                 else:
@@ -195,7 +212,14 @@ def get_lat_lon_rand_loc(data_3cx):
                     print('prev_c in the nested for loop in the else statement', prev_c, row['number_locations'])
                     print('current_c in the nested for loop in the else statement', current_c, row['number_locations'])
                     # Here I use the standard dist_tot instead of row['distance_locations']
-                    sec_coords = get_coords_from_dist_and_segment(prev_c, current_c, dist_tot)
+                    #sec_coords = get_coords_from_dist_and_segment(prev_c, current_c, dist_tot)
+                    #coords_list.append(C)
+                    bearing = calculate_initial_compass_bearing(prev_c,current_c)
+                    # I need to make sec_coords a tuple
+                    sec_coords = geodesic(kilometers=dist_tot).destination(Point(prev_c[0], prev_c[1]), bearing)#.format_decimal()
+                    list_sec_coords = [float(sec_coords[0]), float(sec_coords[1])]
+                    sec_coords = tuple(list_sec_coords)
+                    print('sec coords:', sec_coords)
                     res_list.append(sec_coords)
                     # The just produced coordinates of the random location becomes the previous coordinates
                     # for the next calculation
@@ -203,20 +227,86 @@ def get_lat_lon_rand_loc(data_3cx):
                 j += 1
         i += 1
     print(res_list, len(res_list))
+    return res_list
 
+def calculate_initial_compass_bearing(pointA, pointB):
+    """
+    Calculates the bearing between two points.
+    The formulae used is the following:
+    θ = atan2(sin(Δlong).cos(lat2),
+              cos(lat1).sin(lat2) − 
+    sin(lat1).cos(lat2).cos(Δlong))
+    :Parameters:
+    - `pointA: The tuple representing the 
+    latitude/longitude for the
+    first point. Latitude and longitude must be in 
+    decimal degrees
+    - `pointB: The tuple representing the latitude/longitude for the
+    second point. Latitude and longitude must be in decimal degrees
+    :Returns:
+    The bearing in degrees
+    :Returns Type:
+    float
+    """
+    if (type(pointA) != tuple) or (type(pointB) != tuple):
+        raise TypeError("Only tuples are supported as arguments")
+
+    lat1 = math.radians(pointA[0])
+    lat2 = math.radians(pointB[0])
+
+    diffLong = math.radians(pointB[1] - pointA[1])
+
+    x = math.sin(diffLong) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
+        * math.cos(lat2) * math.cos(diffLong))
+
+    initial_bearing = math.atan2(x, y)
+
+    # Now we have the initial bearing but math.atan2 return values
+    # from -180° to + 180° which is not what we want for a compass bearing
+    # The solution is to normalize the initial bearing as shown below
+    initial_bearing = math.degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
+
+    return compass_bearing
+
+
+def create_df_random_points(res_list, data_3cx):
+    # Remove zeros from list of coordinates
+    res_list = [i for i in res_list if i != 0]
+    print('this is the final coords list', res_list)
+    # Create dataframe with 3 columns: latitude, longitude and bird_id
+    df_loc = pd.DataFrame.from_records(res_list, columns =['longitude','latitude'])
+    df_loc['ID'] = data_3cx['ID'].iloc[0]
+    print(df_loc)
+    return df_loc
 
 def main():
     if len(sys.argv) < 1:
-        exit('python3.9 os/one_way_dist.py output_files/tracks_with_dist.csv')
+        exit('python3.9 os/one_way_dist.py output_files/tracks_with_dist.csv output_files/tracks_rand_loc.csv output_files/random_loc_5LK.csv')
     pd.set_option('display.max_rows', None)
     warnings.filterwarnings("ignore")
     data = pd.read_csv(sys.argv[1])
     data['date_time'] = pd.to_datetime(data['date_time'])
-    tot_dist_migr = calc_dist_each_rand_loc(data, 'spr')
-    data_3cx = random_loc_on_track(data, tot_dist_migr, 'spr')
+    season = 'spr'
+    tot_dist_migr = calc_dist_each_rand_loc(data, season)
+    data_3cx = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season)\
+         & (data['Juv'] == 1) & (data['ID'] == '5LK')] #& (data['distance'] != 0)]
+    # Remove modelat and modelon duplicates
+    data_3cx = data_3cx.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
+    data_3cx_lat = data_3cx['modelat']
+    dist_rand_loc_3cx = tot_dist_migr.loc[tot_dist_migr['ID'] == '5LK', 'dist_rand_loc']
+    print('total distance 5II',dist_rand_loc_3cx, len(data_3cx_lat))
+    data_3cx = random_loc_on_track(data_3cx, tot_dist_migr, 'spr')
     print('last index of df where I save the df as csv', data_3cx.index[-1], data_3cx.index[0], len(data_3cx))
     data_3cx.to_csv(sys.argv[2], index = False)
-    get_lat_lon_rand_loc(data_3cx)
+    res_list = get_lat_lon_rand_loc(data_3cx)
+    #data_rob = data.loc[(data[f'compl_spr_track'] == 1) & (data['season'] == 'spr')\
+         #& (data['Juv'] == 1) & ((data['ID'] == '5LK') | (data['ID'] == '5IK'))]
+    #data_rob.to_csv(sys.argv[3], index = False)
+    df_loc = create_df_random_points(res_list, data_3cx)
+    df_loc.to_csv(sys.argv[3], index = False)
+
 
 
 
