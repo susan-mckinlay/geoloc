@@ -33,6 +33,15 @@ import math
 from geopy.distance import Point
 from geopy.distance import geodesic
 
+def calculate_distance(cA, cB):
+    """
+    :param cA : pair of point A (long, lat)
+    :param cB : pair of point B (long, lat)
+    :return distance in Km
+    """
+    return geopy.distance.geodesic(cA, cB).km
+
+
 def calc_dist_each_rand_loc(data, season):
     tot_dist_migr = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)].groupby('ID')['distance'].sum().reset_index()
     #& (data[f'adults_{season}_compl_migr'] == 1)
@@ -229,6 +238,71 @@ def get_lat_lon_rand_loc(data):
     print(res_list, len(res_list))
     return res_list
 
+def calculate_coordinates(prev_c, current_c, dist):
+    bearing = calculate_initial_compass_bearing(prev_c,current_c)
+    # I need to make new_coords a tuple
+    new_coords = geodesic(kilometers=dist).destination(Point(prev_c[1], prev_c[0]), bearing)#.format_decimal()
+    # Ned to take it back to coords= lon,lat from lat,lon
+    list_new_coords = [float(new_coords[1]), float(new_coords[0])]
+    new_coords = tuple(list_new_coords)
+    return new_coords
+
+def fix_point_on_segment(row, prev_c, dist_points, dist_tot):
+    print('Im in fix_point_on_segment function')
+    current_c = (row['modelon'], row['modelat'])
+    print('prev_c used to calculate coords', prev_c, 'current_c used to calcuate coords', current_c)
+    if dist_points == dist_tot:
+        dist_calc_coords = dist_points
+        print('distance used to calculate new coords', dist_calc_coords)
+        rand_point = calculate_coordinates(prev_c, current_c, dist_calc_coords)
+        prev_c = rand_point
+    else:
+        dist_calc_coords = dist_points - dist_tot
+        print('distance used to calculate new coords', dist_calc_coords)
+        rand_point = calculate_coordinates(prev_c, current_c, dist_calc_coords)
+        prev_c = rand_point
+    return rand_point, current_c, prev_c
+
+def get_one_dist_points(data):
+    i = 0
+    dist_tot = 246
+    km_left = 0
+    list_coords = []
+    for index, row in data.iterrows():
+        print('The km_left at the beginning of the for loop are', km_left)
+        #dist_points = row['distance']
+        if i == 0:
+            prev_c = (row['modelon'], row['modelat'])
+            print('instance number', i ,'prev_c=', prev_c)
+            dist_points = data['distance'].at[index+1] # get the first distance, which is at the second row
+            print('second instance distance', dist_points)
+        elif (dist_points < dist_tot) & (km_left < dist_tot):
+            print('instance',i,' when dist_points < dist_tot, dist_points =', dist_points)
+            km_left = km_left + dist_points
+            prev_c = (row['modelon'], row['modelat'])
+        elif km_left >= dist_tot:
+            print('instance number', i, 'where km_left >= dist_tot')
+            dist_points = km_left - dist_tot
+            print('dist_points  is', dist_points, 'previous_c is', prev_c, 'current_c is', current_c)
+            rand_point, current_c, prev_c = fix_point_on_segment(row, prev_c, dist_points, dist_tot)
+            print('The random point just generated is', rand_point)
+            list_coords.append(rand_point)
+            dist_points = calculate_distance(rand_point, current_c)
+        elif dist_points >= dist_tot:
+            print('instance number', i, 'where dist_points >= dist_tot; dist_points =', dist_points)
+            dist_points = dist_tot # change dist_points to distance Im going to use in func to get coords of
+            # equally distant point
+            print('this is the dist used to calculate coords',dist_points)
+            rand_point, current_c, prev_c = fix_point_on_segment(row, prev_c, dist_points, dist_tot)
+            print('The random point just generated is', rand_point)
+            list_coords.append(rand_point)
+            dist_points = calculate_distance(rand_point, current_c)
+            print('rand_point used to calculate distance', rand_point, 'and point B', current_c)
+            print('this is the new distance calculated from random_point to point B', dist_points)
+        i += 1
+    print(list_coords, len(list_coords))
+    return list_coords
+
 def calculate_initial_compass_bearing(pointA, pointB):
     """
     Calculates the bearing between two points.
@@ -251,10 +325,10 @@ def calculate_initial_compass_bearing(pointA, pointB):
     if (type(pointA) != tuple) or (type(pointB) != tuple):
         raise TypeError("Only tuples are supported as arguments")
 
-    lat1 = math.radians(pointA[0])
-    lat2 = math.radians(pointB[0])
+    lat1 = math.radians(pointA[1])
+    lat2 = math.radians(pointB[1])
 
-    diffLong = math.radians(pointB[1] - pointA[1])
+    diffLong = math.radians(pointB[0] - pointA[0])
 
     x = math.sin(diffLong) * math.cos(lat2)
     y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
@@ -273,8 +347,8 @@ def calculate_initial_compass_bearing(pointA, pointB):
 
 def create_df_random_points(res_list, data_3cx):
     # Remove zeros from list of coordinates
-    res_list = [i for i in res_list if i != 0]
-    print('this is the final coords list', res_list)
+    #res_list = [i for i in res_list if i != 0]
+    #print('this is the final coords list', res_list)
     # Create dataframe with 3 columns: latitude, longitude and bird_id
     df_loc = pd.DataFrame.from_records(res_list, columns =['longitude','latitude'])
     df_loc['ID'] = data_3cx['ID'].iloc[0]
@@ -300,7 +374,8 @@ def main():
     data_3cx = random_loc_on_track(data_3cx, tot_dist_migr, 'spr')
     print('last index of df where I save the df as csv', data_3cx.index[-1], data_3cx.index[0], len(data_3cx))
     data_3cx.to_csv(sys.argv[2], index = False)
-    res_list = get_lat_lon_rand_loc(data_3cx)
+    res_list = get_one_dist_points(data_3cx)
+    #res_list = get_lat_lon_rand_loc(data_3cx)
     #data_rob = data.loc[(data[f'compl_spr_track'] == 1) & (data['season'] == 'spr')\
          #& (data['Juv'] == 1) & ((data['ID'] == '5LK') | (data['ID'] == '5IK'))]
     #data_rob.to_csv(sys.argv[3], index = False)
