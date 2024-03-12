@@ -29,6 +29,7 @@ import geopy.distance
 import warnings
 from pyproj import Geod
 from geographiclib.geodesic import Geodesic
+import mplleaflet
 import math 
 from geopy.distance import Point
 from geopy.distance import geodesic
@@ -247,9 +248,8 @@ def calculate_coordinates(prev_c, current_c, dist):
     new_coords = tuple(list_new_coords)
     return new_coords
 
-def fix_point_on_segment(row, prev_c, dist_points, dist_tot):
+def fix_point_on_segment( prev_c, current_c, dist_points, dist_tot):
     print('Im in fix_point_on_segment function')
-    current_c = (row['modelon'], row['modelat'])
     print('prev_c used to calculate coords', prev_c, 'current_c used to calcuate coords', current_c)
     if dist_points == dist_tot:
         dist_calc_coords = dist_points
@@ -257,7 +257,7 @@ def fix_point_on_segment(row, prev_c, dist_points, dist_tot):
         rand_point = calculate_coordinates(prev_c, current_c, dist_calc_coords)
         prev_c = rand_point
     else:
-        dist_calc_coords = dist_points - dist_tot
+        dist_calc_coords = dist_points
         print('distance used to calculate new coords', dist_calc_coords)
         rand_point = calculate_coordinates(prev_c, current_c, dist_calc_coords)
         prev_c = rand_point
@@ -279,26 +279,43 @@ def get_one_dist_points(data):
         elif (dist_points < dist_tot) & (km_left < dist_tot):
             print('instance',i,' when dist_points < dist_tot, dist_points =', dist_points)
             km_left = km_left + dist_points
-            prev_c = (row['modelon'], row['modelat'])
+            dist_points = row['distance']
+            #prev_c = (row['modelon'], row['modelat'])
         elif km_left >= dist_tot:
-            print('instance number', i, 'where km_left >= dist_tot')
-            dist_points = km_left - dist_tot
+            print('instance number', i, 'where km_left >= dist_tot, km_left =', km_left)
+            dist_points = dist_tot #km_left - dist_tot
+            current_c = (row['modelon'], row['modelat'])
             print('dist_points  is', dist_points, 'previous_c is', prev_c, 'current_c is', current_c)
-            rand_point, current_c, prev_c = fix_point_on_segment(row, prev_c, dist_points, dist_tot)
+            rand_point, current_c, prev_c = fix_point_on_segment(prev_c, current_c, dist_points, dist_tot)
             print('The random point just generated is', rand_point)
             list_coords.append(rand_point)
             dist_points = calculate_distance(rand_point, current_c)
+            km_left = 0 # reset km_left
         elif dist_points >= dist_tot:
-            print('instance number', i, 'where dist_points >= dist_tot; dist_points =', dist_points)
-            dist_points = dist_tot # change dist_points to distance Im going to use in func to get coords of
-            # equally distant point
-            print('this is the dist used to calculate coords',dist_points)
-            rand_point, current_c, prev_c = fix_point_on_segment(row, prev_c, dist_points, dist_tot)
-            print('The random point just generated is', rand_point)
-            list_coords.append(rand_point)
-            dist_points = calculate_distance(rand_point, current_c)
-            print('rand_point used to calculate distance', rand_point, 'and point B', current_c)
-            print('this is the new distance calculated from random_point to point B', dist_points)
+            j = 0
+            for n in range(int(row['number_locations'])): # so that it always keeps the correct current_c for the entire segment instead of going to the next one
+                if j == 0:
+                    print('instance number', i, 'where dist_points >= dist_tot')
+                    dist_points = dist_tot # change dist_points to distance Im going to use in func to get coords of
+                    # equally distant point
+                    print('this is the dist used to calculate coords',dist_points)
+                    current_c = (row['modelon'], row['modelat']) 
+                    rand_point, current_c, prev_c = fix_point_on_segment(prev_c, current_c, dist_points, dist_tot)
+                    print('The random point just generated is', rand_point)
+                    list_coords.append(rand_point)
+                    dist_points = calculate_distance(rand_point, current_c)
+                    print('rand_point used to calculate distance', rand_point, 'and point B', current_c)
+                    print('this is the new distance calculated from random_point to point B', dist_points)
+                else:
+                    print('instance number', i, 'where dist_points >= dist_tot')
+                    dist_points = dist_tot
+                    rand_point, current_c, prev_c = fix_point_on_segment(prev_c, current_c, dist_points, dist_tot)
+                    print('The random point just generated is', rand_point)
+                    list_coords.append(rand_point)
+                    dist_points = calculate_distance(rand_point, current_c)
+                    print('rand_point used to calculate distance', rand_point, 'and point B', current_c)
+                    print('this is the new distance calculated from random_point to point B', dist_points)
+                j += 1
         i += 1
     print(list_coords, len(list_coords))
     return list_coords
@@ -344,7 +361,6 @@ def calculate_initial_compass_bearing(pointA, pointB):
 
     return compass_bearing
 
-
 def create_df_random_points(res_list, data_3cx):
     # Remove zeros from list of coordinates
     #res_list = [i for i in res_list if i != 0]
@@ -354,6 +370,42 @@ def create_df_random_points(res_list, data_3cx):
     df_loc['ID'] = data_3cx['ID'].iloc[0]
     print(df_loc)
     return df_loc
+
+def place_equally_distanced_points(path, n_samples):
+    # Distance between each path coord.
+    geod = Geodesic.WGS84
+    path_distance = [0]
+    for (start_lat, start_lon), (end_lat, end_lon) in zip(path[:-1], path[1:]):
+        path_distance.append(geod.Inverse(start_lat, start_lon, end_lat, end_lon)['s12'])
+    path_distance_cum = np.cumsum(path_distance)
+    point_distance = np.linspace(0, path_distance_cum[-1], n_samples)
+
+    points = []
+    for pd in point_distance:
+    
+        # Find segment with.
+        i_start = np.argwhere(pd >= path_distance_cum)[:, 0][-1]
+    
+        # Early exit for ends.
+        if np.isclose(pd, path_distance_cum[i_start]):
+            points.append(path[i_start])
+            continue
+        elif np.isclose(pd, path_distance_cum[-1]):
+            points.append(path[-1])
+            continue
+        
+        # Distance along segment.
+        start_lat, start_lon = path[i_start]
+        end_lat, end_lon = path[i_start + 1]
+        pd_between = pd - path_distance_cum[i_start]
+    
+        # Location along segment.
+        line = geod.InverseLine(start_lat, start_lon, end_lat, end_lon)
+        g_point = line.Position(pd_between, Geodesic.STANDARD | Geodesic.LONG_UNROLL)
+        points.append((g_point['lat2'], g_point['lon2']))
+    print(points, type(points))
+    return points
+
 
 def main():
     if len(sys.argv) < 1:
@@ -370,17 +422,32 @@ def main():
     data_3cx = data_3cx.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     data_3cx_lat = data_3cx['modelat']
     dist_rand_loc_3cx = tot_dist_migr.loc[tot_dist_migr['ID'] == '5LK', 'dist_rand_loc']
-    print('total distance 5II',dist_rand_loc_3cx, len(data_3cx_lat))
-    data_3cx = random_loc_on_track(data_3cx, tot_dist_migr, 'spr')
-    print('last index of df where I save the df as csv', data_3cx.index[-1], data_3cx.index[0], len(data_3cx))
-    data_3cx.to_csv(sys.argv[2], index = False)
-    res_list = get_one_dist_points(data_3cx)
+    #print('total distance 5II',dist_rand_loc_3cx, len(data_3cx_lat))
+    #data_3cx = random_loc_on_track(data_3cx, tot_dist_migr, 'spr')
+    #print('last index of df where I save the df as csv', data_3cx.index[-1], data_3cx.index[0], len(data_3cx))
+    #data_3cx.to_csv(sys.argv[2], index = False)
+    #res_list = get_one_dist_points(data_3cx)
     #res_list = get_lat_lon_rand_loc(data_3cx)
     #data_rob = data.loc[(data[f'compl_spr_track'] == 1) & (data['season'] == 'spr')\
          #& (data['Juv'] == 1) & ((data['ID'] == '5LK') | (data['ID'] == '5IK'))]
     #data_rob.to_csv(sys.argv[3], index = False)
-    df_loc = create_df_random_points(res_list, data_3cx)
-    df_loc.to_csv(sys.argv[3], index = False)
+    #df_loc = create_df_random_points(res_list, data_3cx)
+    path = [
+    (57.6905, 11.9882),
+    (57.6966, 11.9877),
+    (57.7006, 12.0164),
+    (57.6888, 12.0348),
+    ]
+    path = list(zip(data_3cx.modelat, data_3cx.modelon))
+    n_samples = 18
+    points = place_equally_distanced_points(path, n_samples)
+    points_df = pd.DataFrame.from_records(points, columns =['latitude','longitude'])
+    print(path, type(path))
+    data = pd.DataFrame.from_records(path, columns =['latitude','longitude'])
+    plt.plot(data['longitude'], data['latitude'],'b') # Draw blue line
+    plt.plot(points_df['longitude'], points_df['latitude'], 'rs') # Draw red squares
+    mplleaflet.show()
+    #df_loc.to_csv(sys.argv[3], index = False)
 
 
 
