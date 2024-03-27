@@ -119,7 +119,6 @@ def select_shortest_distance(points_indiv_1, points_indiv_2):
         # of Track A
         tot_distance_list = []
         j += 1
-    print(min_distance_list)
     return min_distance_list
 
 def change_lat_and_long(data_indiv, interpolated_lat_45, interpolated_long_45, interpolated_lat_17, interpolated_long_17):
@@ -244,8 +243,6 @@ def plot_maps_migration(points, path):
         prev_c = current_c
         i += 1
     points_df['distance'] = array_dist
-    print(points_df)
-    print(points_df['distance'].sum())
     
     return points_df
 
@@ -255,9 +252,46 @@ def find_index_closest_value(data, limit):
     index_closest_value = np.argmin(difference, axis=0)
     return index_closest_value
 
-def interpolate_coords(data_indiv, limit):
-    print('hello')
+def get_coordinates_between_interpolation(data_indiv, limit):
+    data_bigger = data_indiv.loc[(data_indiv['modelat'] > limit)]
+    index_data_bigger = find_index_closest_value(data_bigger, limit)
+    prog_number_bigger = data_bigger['prog_number'].iloc[index_data_bigger]
+    print('progressive number above limit',data_bigger.loc[data_bigger['prog_number'] == prog_number_bigger, 'modelat'])
+    second_lat = data_bigger.loc[data_bigger['prog_number'] == prog_number_bigger, 'modelat'].values[0]
+    second_long = data_bigger.loc[data_bigger['prog_number'] == prog_number_bigger, 'modelon'].values[0]
 
+    data_smaller = data_indiv.loc[(data_indiv['modelat'] < limit)]
+    index_number_smaller = find_index_closest_value(data_smaller, limit)
+    prog_number_smaller = data_smaller['prog_number'].iloc[index_number_smaller]
+    print('progressive number below limit',data_smaller.loc[data_smaller['prog_number'] == prog_number_smaller, 'modelat'])
+    first_lat = data_smaller.loc[data_smaller['prog_number'] == prog_number_smaller, 'modelat'].values[0]
+    first_long = data_smaller.loc[data_smaller['prog_number'] == prog_number_smaller, 'modelon'].values[0]
+    
+    return first_lat, second_lat, first_long, second_long
+
+def interpolate_coords(data_indiv, limit):
+    # Get the coordinates to get the segment where I am going to find points every 100 metres
+    first_lat, second_lat, first_long, second_long = get_coordinates_between_interpolation(data_indiv, limit)
+    points = []
+    geod = Geodesic.WGS84
+    # Get the segment where I need to interpolate the longitude at the limit (45 N or 17 N parallel)
+    line = geod.InverseLine(first_lat, first_long, second_lat, second_long)
+    distance = 50 # I want to interpolate a point every 50 m
+    tot_number_points = int(math.ceil(line.s13 / distance)) # math_ceil rounds a number up to its closest integer
+    print('This is line.s13', line.s13)
+    i = 0
+    # s13 – distance of the segment in meters
+    for point in range(tot_number_points + 1):
+        if point == 0:
+            print("point 0")
+        distance_within_segment = min(distance * point, line.s13)
+        interpolated_points = line.Position(distance_within_segment, Geodesic.STANDARD | Geodesic.LONG_UNROLL)
+        latitude = interpolated_points['lat2']
+        if (np.isclose(latitude, limit)) & (i == 0): # only take the first coordinate
+            print('Interpolated coordinates\n',(interpolated_points['lat2'], interpolated_points['lon2']))
+            points.append((interpolated_points['lat2'], interpolated_points['lon2']))
+            i += 1
+    return points[0] # in format list of tuple [(lat, long)], points[0] = (lat, long)
 
 def main():
     if len(sys.argv) < 1:
@@ -275,29 +309,26 @@ def main():
     # For individual 5IK
     indiv = '5IK'
     data_indiv_5IK = prepare_dataset(data, season, indiv)
-    # Interpolated latitude and longitude for the individual 5IK
-    interpolated_lat_17 = 17
-    interpolated_long_17 = 13.766689 #13.74
-    interpolated_lat_45 = 45
-    interpolated_long_45 = 16.617252 #16.63
-    data_indiv_5IK = change_lat_and_long(data_indiv_5IK, interpolated_lat_45, interpolated_long_45, interpolated_lat_17, interpolated_long_17)
+    # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
+    points_45 = interpolate_coords(data_indiv_5IK, 45) # points_45 = (lat, lon)
+    points_17 = interpolate_coords(data_indiv_5IK, 17) # points_17 = (lat, lon)
+    data_indiv_5IK = change_lat_and_long(data_indiv_5IK, points_45[0], points_45[1], points_17[0], points_17[1])
     path_5IK = from_df_to_list_of_tuples(data_indiv_5IK)
     points_5IK = place_equally_distanced_points(path_5IK, n_samples)
     points_df_5IK = plot_maps_migration(points_5IK, path_5IK)
-    #points_df_5IK.to_csv(sys.argv[2], index = False)
+    points_df_5IK.to_csv(sys.argv[2], index = False)
     # For individual 5LK
     indiv = '5LK'
     data_indiv_5LK = prepare_dataset(data, season, indiv)
-    interpolate_coords(data_indiv_5LK, 45)
-    interpolated_lat_17 = 17
-    interpolated_long_17 = 10.137010 #10.141
-    interpolated_lat_45 = 45
-    interpolated_long_45 = 9.703307 #9.69
-    data_indiv_5LK = change_lat_and_long(data_indiv_5LK, interpolated_lat_45, interpolated_long_45, interpolated_lat_17, interpolated_long_17)
+    # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
+    points_45 = interpolate_coords(data_indiv_5LK, 45) # points_45 = (lat, lon)
+    points_17 = interpolate_coords(data_indiv_5LK, 17) # points_17 = (lat, lon)
+    #print('This is interpolated lat 45', points_45[0], 'this is the longitude', points_45[1])
+    data_indiv_5LK = change_lat_and_long(data_indiv_5LK, points_45[0], points_45[1], points_17[0], points_17[1])
     path_5LK = from_df_to_list_of_tuples(data_indiv_5LK)
     points_5LK = place_equally_distanced_points(path_5LK, n_samples)
     points_df_5LK = plot_maps_migration(points_5LK, path_5LK)
-    #points_df_5LK.to_csv(sys.argv[3], index = False)
+    points_df_5LK.to_csv(sys.argv[3], index = False)
 
     # Calculate one-way distance for individual 5IK
     min_distance_list_5IK = select_shortest_distance(points_5IK, points_5LK)
