@@ -36,8 +36,8 @@ from geopy.distance import geodesic
 
 def calculate_distance(cA, cB):
     """
-    :param cA : pair of point A (long, lat)
-    :param cB : pair of point B (long, lat)
+    :param cA : pair of point A (lat, long)
+    :param cB : pair of point B (lat, long)
     :return distance in Km
     """
     return geopy.distance.geodesic(cA, cB).km
@@ -72,7 +72,6 @@ def calc_dist_each_rand_loc(data, season):
     #& (data[f'adults_{season}_compl_migr'] == 1)
     tot_dist_migr['dist_rand_loc'] = tot_dist_migr['distance'].div(20).round()
     tot_dist_migr['dist_rand_loc'] = tot_dist_migr['dist_rand_loc'].astype(int)
-    print(tot_dist_migr)
     return tot_dist_migr
 
 def prepare_dataset(data, season, indiv):
@@ -93,22 +92,26 @@ def from_df_to_list_of_tuples(data_indiv):
     path = list(zip(data_indiv.modelat, data_indiv.modelon))
     return path
 
+def select_shortest_distance_fast(points_indiv_1, points_indiv_2):
+    """
+    The function select shortest distance in one line with list comprehension
+    """
+    return [min([calculate_distance(i,j) for j in points_indiv_2]) for i in points_indiv_1]
+
 def select_shortest_distance(points_indiv_1, points_indiv_2):
     """
-    It gets a point 1 in Track A (list of tuples of coords)
+    It gets a point 1 in Track A (list of tuples of coords (lat, long))
     and finds the shortest distance between point 1 and all the other
     random points in Track B (list of tuples of coords) and appends it to a list called min_distance_list 
     and so on until all the points are done. It returns a list with all the minimum distances
     """
-    # Reverse the order of the tuples because right now it is (lat, long) but I need it like this
-    # (long, lat)
-    points_indiv_1 = [tuple(reversed(t)) for t in points_indiv_1]
-    points_indiv_2 = [tuple(reversed(t)) for t in points_indiv_2]
-    tot_distance_list = []
+    #print('This is points individual 1\n', points_indiv_1)
+    #print('This is points individual 2\n', points_indiv_2)
     min_distance_list = []
     i = 0
     j = 0
     for point_track_a in points_indiv_1:
+        tot_distance_list = [] # Initialize tot_distance_list at the end of each inner for loop
         for point_track_b in points_indiv_2:
             distance = calculate_distance(point_track_a, point_track_b)
             tot_distance_list.append(distance)
@@ -117,8 +120,8 @@ def select_shortest_distance(points_indiv_1, points_indiv_2):
         # reset tot_distance to an empty list so it resets every time it finishes the inner loop, so it only
         # appends the distances of one point with all the other 20 points, the list empties when it gets to point 2
         # of Track A
-        tot_distance_list = []
         j += 1
+    print(min_distance_list)
     return min_distance_list
 
 def change_lat_and_long(data_indiv, interpolated_lat_45, interpolated_long_45, interpolated_lat_17, interpolated_long_17):
@@ -134,16 +137,17 @@ def change_lat_and_long(data_indiv, interpolated_lat_45, interpolated_long_45, i
     # locations below 45 N and above 17 N
     first_row_45 = data_indiv.loc[(data_indiv['modelat'] > 45)]
     first_row_17 =  data_indiv.loc[(data_indiv['modelat'] < 17)]
-    #print('First coordinates that are above 45 N \n', first_row_45[['date_time','ID','modelat']])
-    #print('First coordinates that are below latitude 17 N \n', first_row_17[['date_time','ID','modelat']])
     limit = 45
     data_indiv_fixed = find_closest_values(first_row_45, limit, data_indiv, interpolated_lat_45, interpolated_long_45)
     limit = 17
     data_indiv_fixed = find_closest_values(first_row_17, limit, data_indiv, interpolated_lat_17, interpolated_long_17)
+
     # Filter out the points above 45 N and below 17 N that we don't need, since we are not interested in the
     # breeding and wintering areas, we only want to consider the migration track
-    data_indiv_fixed = data_indiv_fixed.loc[(data_indiv['modelat'] <= 45) & (data_indiv['modelat'] >= 17)]
-    print('data indiv fixed\n', data_indiv_fixed[['prog_number','ID','modelon','modelat']])
+    data_indiv_fixed = data_indiv_fixed.loc[
+    (data_indiv_fixed['modelat'] <= 44.5) & (data_indiv_fixed['modelat'] >= 16.5)]
+    # I've changed the latitude cut-offs slightly to include interpolated values such as 16.9999
+    #print('data indiv fixed\n', data_indiv_fixed[['prog_number','ID','modelon','modelat']])
     return data_indiv_fixed
 
 def find_closest_values(first_row, limit, data_indiv, interpolated_lat, interpolated_long):
@@ -154,6 +158,7 @@ def find_closest_values(first_row, limit, data_indiv, interpolated_lat, interpol
     """
     index_closest_value = find_index_closest_value(first_row, limit)
     prog_number = first_row['prog_number'].iloc[index_closest_value]
+    print('This is the modelat Im going to change with the interpolated one', interpolated_lat)
     data_indiv.loc[data_indiv['prog_number'] == prog_number, 'modelat'] = interpolated_lat
     data_indiv.loc[data_indiv['prog_number'] == prog_number, 'modelon'] = interpolated_long
     return data_indiv
@@ -278,7 +283,6 @@ def interpolate_coords(data_indiv, limit):
     line = geod.InverseLine(first_lat, first_long, second_lat, second_long)
     distance = 50 # I want to interpolate a point every 50 m
     tot_number_points = int(math.ceil(line.s13 / distance)) # math_ceil rounds a number up to its closest integer
-    print('This is line.s13', line.s13)
     i = 0
     # s13 – distance of the segment in meters
     # I iterate to get the coordinates of a point every 50 m until I get one that has the
@@ -295,11 +299,13 @@ def interpolate_coords(data_indiv, limit):
             i += 1
     return points[0] # in format list of tuple [(lat, long)], points[0] = (lat, long)
 
-def create_df_with_points(points_df_5IK, points_df_5LK):
-    points_df_5IK['ID'] = '5IK'
-    points_df_5LK['ID'] = '5LK'
-    #points_df_5IK['tot_distance'] = 
-    #points_df_5LK['tot_distance'] = 
+def create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_indiv_2):
+    points_df_1['ID'] = '5IK'
+    points_df_2['ID'] = '5LK'
+    points_df_1['tot_distance'] = tot_dist_indiv_1
+    points_df_2['tot_distance'] = tot_dist_indiv_2
+    merged_df = pd.concat([points_df_1, points_df_2], axis = 0)
+    return merged_df
 
 
 def main():
@@ -323,11 +329,14 @@ def main():
     # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
     points_45 = interpolate_coords(data_indiv_1, 45) # points_45 = (lat, lon)
     points_17 = interpolate_coords(data_indiv_1, 17) # points_17 = (lat, lon)
+    print('Individuo 1', points_17)
     data_indiv_1 = change_lat_and_long(data_indiv_1, points_45[0], points_45[1], points_17[0], points_17[1])
+    print(data_indiv_1)
     path_indiv_1 = from_df_to_list_of_tuples(data_indiv_1)
     points_indiv_1 = place_equally_distanced_points(path_indiv_1, n_samples)
+    print(points_indiv_1)
     points_df_1 = plot_maps_migration(points_indiv_1, path_indiv_1)
-    points_df_1.to_csv(sys.argv[2], index = False)
+    #points_df_1.to_csv(sys.argv[2], index = False)
 
     # For individual 5LK
     indiv = '5LK'
@@ -338,37 +347,38 @@ def main():
     data_indiv_2 = change_lat_and_long(data_indiv_2, points_45[0], points_45[1], points_17[0], points_17[1])
     path_indiv_2 = from_df_to_list_of_tuples(data_indiv_2)
     points_indiv_2 = place_equally_distanced_points(path_indiv_2, n_samples)
+    print(points_indiv_2)
     points_df_2 = plot_maps_migration(points_indiv_2, path_indiv_2)
-    points_df_2.to_csv(sys.argv[3], index = False)
-
-    #print('SUM 5IK first and then 5LK\n',data_indiv_5IK['distance'].sum(), data_indiv_5LK['distance'].sum())
+    #points_df_2.to_csv(sys.argv[3], index = False)
 
     # Calculate one-way distance for individual 5IK
-    min_distance_list_1 = select_shortest_distance(points_indiv_1, points_indiv_2)
-    print('This is min distance list of 5IK', min_distance_list_1)
+    min_distance_list_1 = select_shortest_distance_fast(points_indiv_1, points_indiv_2)
     sum_distances_1 = sum(min_distance_list_1)
-    print('sum distance list 5IK', sum_distances_1)
     # Remember to use migration track cut off at 45 N and 17 N for tot_distance!
     # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
     data_indiv_1 = add_distance_in_dataframe(data_indiv_1)
-    tot_sum_indiv_1 = data_indiv_1['distance'].sum()
-    print('Total distance sum after recalculation',data_indiv_1['distance'].sum(), tot_sum_indiv_1)
+    tot_dist_indiv_1 = data_indiv_1['distance'].sum()
+    print('Tot distance individual\n',tot_dist_indiv_1)
+    print('Sum distances indvi 1', sum_distances_1)
     # Sum distances between track of individual A and track of individual B divided by total distance of track
     # of individual A
-    sum_indiv_1 = sum_distances_1 / tot_sum_indiv_1
+    sum_indiv_1 = sum_distances_1 / tot_dist_indiv_1
 
     # Calculate one-way distance for individual 5LK
-    min_distance_list_2 = select_shortest_distance(points_indiv_2, points_indiv_1)
-    print('This is min distance list of 5LK', min_distance_list_2)
+    min_distance_list_2 = select_shortest_distance_fast(points_indiv_2, points_indiv_1)
     sum_distances_2 = sum(min_distance_list_2)
-    print('sum distance list 5LK', sum_distances_2)
     # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
     data_indiv_2 = add_distance_in_dataframe(data_indiv_2)
-    tot_sum_indiv_2 = data_indiv_2['distance'].sum()
-    print('Total distance sum after recalculation',data_indiv_2['distance'].sum(), tot_sum_indiv_2)
+    tot_dist_indiv_2 = data_indiv_2['distance'].sum()
+    print('Tot distance individual\n', tot_dist_indiv_2)
+    print('Sum distances indvi 2', sum_distances_2)
     # Sum distances between track of individual B and track of individual A divided by total distance of track
     # of individual B
-    sum_indiv_2 = sum_distances_2 / tot_sum_indiv_2
+    sum_indiv_2 = sum_distances_2 / tot_dist_indiv_2
+
+    merged_df = create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_indiv_2)
+    merged_df.to_csv(sys.argv[2], index = False)
+
 
     # Final one-way distance
     print('final one-way distance in km', (sum_indiv_1 + sum_indiv_2)/2)
