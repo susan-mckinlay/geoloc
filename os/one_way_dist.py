@@ -307,6 +307,50 @@ def create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_i
     merged_df = pd.concat([points_df_1, points_df_2], axis = 0)
     return merged_df
 
+def prepare_datasets(data, season, n_samples, indiv):
+    data_indiv_1 = prepare_dataset(data, season, indiv)
+    # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
+    points_45 = interpolate_coords(data_indiv_1, 45) # points_45 = (lat, lon)
+    points_17 = interpolate_coords(data_indiv_1, 17) # points_17 = (lat, lon)
+    print('Individuo 1', points_17)
+    data_indiv_1 = change_lat_and_long(data_indiv_1, points_45[0], points_45[1], points_17[0], points_17[1])
+    path_indiv_1 = from_df_to_list_of_tuples(data_indiv_1)
+    points_indiv_1 = place_equally_distanced_points(path_indiv_1, n_samples)
+    #points_df_1 = plot_maps_migration(points_indiv_1, path_indiv_1)
+    #points_df_1.to_csv(sys.argv[2], index = False)
+
+    return points_indiv_1, data_indiv_1
+
+def calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, data_indiv_2):
+    # Calculate one-way distance for individual 5IK
+    min_distance_list_1 = select_shortest_distance_fast(points_indiv_1, points_indiv_2)
+    sum_distances_1 = sum(min_distance_list_1)
+    # Remember to use migration track cut off at 45 N and 17 N for tot_distance!
+    # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
+    data_indiv_1 = add_distance_in_dataframe(data_indiv_1)
+    tot_dist_indiv_1 = data_indiv_1['distance'].sum()
+    print('Tot distance individual\n',tot_dist_indiv_1)
+    print('Sum distances indvi 1', sum_distances_1)
+    # Sum distances between track of individual A and track of individual B divided by total distance of track
+    # of individual A
+    sum_indiv_1 = sum_distances_1 / tot_dist_indiv_1
+    # Calculate one-way distance for individual 5LK
+    min_distance_list_2 = select_shortest_distance_fast(points_indiv_2, points_indiv_1)
+    sum_distances_2 = sum(min_distance_list_2)
+    # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
+    data_indiv_2 = add_distance_in_dataframe(data_indiv_2)
+    tot_dist_indiv_2 = data_indiv_2['distance'].sum()
+    print('Tot distance individual\n', tot_dist_indiv_2)
+    print('Sum distances indvi 2', sum_distances_2)
+    # Sum distances between track of individual B and track of individual A divided by total distance of track
+    # of individual B
+    sum_indiv_2 = sum_distances_2 / tot_dist_indiv_2
+    # Final one-way distance
+    final_one_way_dist = (sum_indiv_1 + sum_indiv_2)/2
+    print('final one-way distance in km', final_one_way_dist)
+
+    return final_one_way_dist
+
 
 def main():
     if len(sys.argv) < 1:
@@ -322,66 +366,27 @@ def main():
     data = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)]
     # Number of equally distanced points
     n_samples = 22
+    # Individuals used for calculating one-way-distance
+    bird_id = data['ID'].unique()
+    print('An array of the bird IDs', np.array([bird_id, bird_id]))
+    list_one_way_distance = []
+    i = 0
+    for index in range(len(bird_id)-1):
+        print('Round number: ', index)
+        first_individual = bird_id[index]
+        print('This is the first individual used: ', first_individual)
+        points_indiv_1, data_indiv_1 = prepare_datasets(data, season, n_samples, first_individual)
+        second_individual = bird_id[index +1]
+        print('This is the next individual used: ,', second_individual)
+        points_indiv_2, data_indiv_2 = prepare_datasets(data, season, n_samples, second_individual) # take the next individual
+        final_one_way_distance = calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, data_indiv_2)
+        list_one_way_distance.append(final_one_way_distance)
+        i += 1
+    print('list one-way distance', list_one_way_distance)
 
-    # For individual 5IK
-    indiv = '5IK'
-    data_indiv_1 = prepare_dataset(data, season, indiv)
-    # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
-    points_45 = interpolate_coords(data_indiv_1, 45) # points_45 = (lat, lon)
-    points_17 = interpolate_coords(data_indiv_1, 17) # points_17 = (lat, lon)
-    print('Individuo 1', points_17)
-    data_indiv_1 = change_lat_and_long(data_indiv_1, points_45[0], points_45[1], points_17[0], points_17[1])
-    print(data_indiv_1)
-    path_indiv_1 = from_df_to_list_of_tuples(data_indiv_1)
-    points_indiv_1 = place_equally_distanced_points(path_indiv_1, n_samples)
-    print(points_indiv_1)
-    points_df_1 = plot_maps_migration(points_indiv_1, path_indiv_1)
-    #points_df_1.to_csv(sys.argv[2], index = False)
+    #merged_df = create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_indiv_2)
+    #merged_df.to_csv(sys.argv[2], index = False)
 
-    # For individual 5LK
-    indiv = '5LK'
-    data_indiv_2 = prepare_dataset(data, season, indiv)
-    # Interpolate coordinates at 45 and 17 of latitude (=cut-offs)
-    points_45 = interpolate_coords(data_indiv_2, 45) # points_45 = (lat, lon)
-    points_17 = interpolate_coords(data_indiv_2, 17) # points_17 = (lat, lon)
-    data_indiv_2 = change_lat_and_long(data_indiv_2, points_45[0], points_45[1], points_17[0], points_17[1])
-    path_indiv_2 = from_df_to_list_of_tuples(data_indiv_2)
-    points_indiv_2 = place_equally_distanced_points(path_indiv_2, n_samples)
-    print(points_indiv_2)
-    points_df_2 = plot_maps_migration(points_indiv_2, path_indiv_2)
-    #points_df_2.to_csv(sys.argv[3], index = False)
-
-    # Calculate one-way distance for individual 5IK
-    min_distance_list_1 = select_shortest_distance_fast(points_indiv_1, points_indiv_2)
-    sum_distances_1 = sum(min_distance_list_1)
-    # Remember to use migration track cut off at 45 N and 17 N for tot_distance!
-    # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
-    data_indiv_1 = add_distance_in_dataframe(data_indiv_1)
-    tot_dist_indiv_1 = data_indiv_1['distance'].sum()
-    print('Tot distance individual\n',tot_dist_indiv_1)
-    print('Sum distances indvi 1', sum_distances_1)
-    # Sum distances between track of individual A and track of individual B divided by total distance of track
-    # of individual A
-    sum_indiv_1 = sum_distances_1 / tot_dist_indiv_1
-
-    # Calculate one-way distance for individual 5LK
-    min_distance_list_2 = select_shortest_distance_fast(points_indiv_2, points_indiv_1)
-    sum_distances_2 = sum(min_distance_list_2)
-    # Recalculate all the distances of the segments now that the original dataframe is cut off at 17 and 45 lat N
-    data_indiv_2 = add_distance_in_dataframe(data_indiv_2)
-    tot_dist_indiv_2 = data_indiv_2['distance'].sum()
-    print('Tot distance individual\n', tot_dist_indiv_2)
-    print('Sum distances indvi 2', sum_distances_2)
-    # Sum distances between track of individual B and track of individual A divided by total distance of track
-    # of individual B
-    sum_indiv_2 = sum_distances_2 / tot_dist_indiv_2
-
-    merged_df = create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_indiv_2)
-    merged_df.to_csv(sys.argv[2], index = False)
-
-
-    # Final one-way distance
-    print('final one-way distance in km', (sum_indiv_1 + sum_indiv_2)/2)
 
 
 
