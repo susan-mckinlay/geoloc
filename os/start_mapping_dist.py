@@ -27,8 +27,9 @@ from cycler import cycler
 from matplotlib.legend import Legend
 import geopy.distance
 import warnings
+import one_way_dist
 
-# Fixing the progressive number colum
+# Fixing the progressive number column
 def fix_prog_tot_col(data):
     prog_tot = 0
     list_prog = [ ]
@@ -73,8 +74,8 @@ def calculate_avrg_migr_dep(data, season):
     It takes the dataframe with all the locations with their corresponding time, it converts it to julian date and calculates
     the mean of the departure date of migration
     """
-    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) &\
-        (data[f'adults_{season}_compl_migr'] == 1) & (data['Juv'] == 0)]
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season)&\
+    (data[f'adults_{season}_compl_migr'] == 1) & (data['Juv'] == 0)]
     data['date_time_dt'] = data['date_time'].dt.date
     remove_nat_values = data.loc[~data.date_time_dt.isnull()]
     #print('remove nat values\n',remove_nat_values)
@@ -83,20 +84,32 @@ def calculate_avrg_migr_dep(data, season):
     start_migr['julian_day_start_migr'] = start_migr['date_time_dt'].apply(lambda x: (x.timetuple().tm_yday) % 365)
     print(f'mean departure {season} migration\n', start_migr['julian_day_start_migr'].mean())
 
-def get_adults_with_compl_migr(data, individuals):
+def get_adults_with_compl_migr(data, individuals):                                   
     # First get adults with column 'repeated' == 1 (not sure what it means and it's probably useless anyway)
-        # The juveniles don't have column['repeated'] == 1 in the file individuals.xlsx
+    # The juveniles don't have column['repeated'] == 1 in the file individuals.xlsx
     repeated = list(individuals.loc[individuals['repeated'] == 1, 'ID'])
     print('individuals with complete migration\n', repeated)
     data['repeated'] = np.where(data['ID'].isin(repeated), 1, 0)
-    adults_aut = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'CH')\
-        & (individuals['compl_aut_track']) & (individuals['Juv'] == 0), 'ID'])
+    adults_aut = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'IT')\
+        & (individuals['compl_aut_track'] == 1) & (individuals['Juv'] == 0) & (individuals['Pop'] == 1), 'ID'])
     print('list of adults with complete autumn migration\n',adults_aut, len(adults_aut))
     data['adults_aut_compl_migr'] = np.where(data['ID'].isin(adults_aut), 1, 0)
-    adults_spr = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'CH')\
-        & (individuals['compl_spr_track']) & (individuals['Juv'] == 0), 'ID'])
+    adults_spr = list(individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'IT')\
+        & (individuals['compl_spr_track'] == 1) & (individuals['Juv'] == 0) & (individuals['Pop'] == 1), 'ID'])
     data['adults_spr_compl_migr'] = np.where(data['ID'].isin(adults_spr), 1, 0)
-    print('list of adults with complete sring migration\n',adults_spr, len(adults_spr))
+    print('list of adults with complete spring migration\n',adults_spr, len(adults_spr))
+    list_ad_autumn = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index()['ID']
+    print('Number of adults with complete autumn migration\n', list_ad_autumn)
+    list_ad_spring = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index()['ID']
+    print('Number of adults with complete spring migration\n', list_ad_spring)
+    print(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]), 'how many individuals?', len(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]))) # 3TR on 5th row in spring but not aut, 5AY on 6th row in spring but not aut
+    # Individuals in autumn but not spring in row[0]
+    # '1SU' '1UE' '1WH' '1YA' '1ZP' '1ZS' '1ZV' '1ZW' '2AI' '2AL' '2AR' '2DC'
+    print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
+    print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
+    print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
+    print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
+    # 'repeated' == 1 column is useless, no idea what it means... some individuals that have both spring and autumn migration do not have the value 1 of the column 'repeated'
     return data
 
 def setting_up_the_map(ax):
@@ -117,12 +130,12 @@ def setting_up_the_map(ax):
     grid_lines.yformatter = LATITUDE_FORMATTER
     return ax
 
-def all_birds_map(data, save_fig, season):
+def all_birds_map(data, save_fig, season, data_loc):
     plt.figure(figsize=(30,10))
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
     # Set the background of the map
-    ax.set_extent((-20.0, 43.0, 55.0, -33.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    ax.set_extent((-20.0, 43.0, 55.0, 0.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -138,20 +151,29 @@ def all_birds_map(data, save_fig, season):
                 y = country.geometry.centroid.y
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     # Drop NaN values in modelat and modelon columns
-    data = data.dropna(subset = ['modelat','modelon'])
-    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1) & (data['Juv'] == 0)]
+    #data = data.dropna(subset = ['modelat','modelon'])
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
+    #print('First data points of data1\n',data1[['ID','modelat']])
+    # & (data['Juv'] == 1)]
+    # To map complete tracks of adults add this & (data[f'adults_{season}_compl_migr'] == 1) 
+    # Individual 5GM
+    #data = data.loc[(data['ID'] == '5GM') & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1) & (data[f'compl_{season}_track'] == 1)]
+    #data = data.loc[(data['ID'] == '3RD') | (data['ID'] == '3RN') | (data['ID'] == '1YD') | (data['ID'] == '3MY')]
+    #print('First data points of data of individual\n',data.loc[data['ID'] == '5GM', 'modelat'].tail())
+    data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['ID'].unique()
-    print('total number of birds is', len(bird_id))
+    print('total number of birds is', len(bird_id), bird_id)
     # I need to choose a proper set of colors
-    ax.set_prop_cycle('color',plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
+    ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
     for bird in bird_id:
         try:
             x = data.loc[(data['ID'] == bird), 'modelon']
             y = data.loc[(data['ID'] == bird), 'modelat']
-            ax.plot(x,y,'-', transform=ccrs.PlateCarree(), linewidth = 1.5, label = bird) # to use dictionary for colors: , color = colors[bird]
-            ax.plot(x,y,'.',transform=ccrs.PlateCarree(), label = bird, c = 'black', zorder = 1)
+            # ccrs.PlateCarree()
+            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) # to use dictionary for colors: , color = colors[bird]
+            ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
     plt.legend(fontsize='small', loc="upper left")
@@ -160,7 +182,7 @@ def all_birds_map(data, save_fig, season):
 
 def main():
     if len(sys.argv) < 1:
-        exit('python3.9 os/start_mapping_dist.py input_files/tracks.csv input_files/individuals.xlsx')
+        exit('python3.9 os/start_mapping_dist.py input_files/tracks.csv input_files/individuals.xlsx output_files/random_loc_5LK.csv')
     pd.set_option('display.max_rows', None)
     warnings.filterwarnings("ignore")
     data = pd.read_csv(sys.argv[1], sep = ';', na_values = ['NA','a'], decimal=',')
@@ -174,7 +196,8 @@ def main():
     data = get_adults_with_compl_migr(data, individuals)
     data = fix_prog_tot_col(data)
     data = data.dropna(subset = ['modelat','modelon'])
-    calculate_avrg_migr_dep(data, 'spr')
+    #print('Data from individual 2CT\n', data.loc[data['ID'] == '2CT', 'date_time'])
+    #calculate_avrg_migr_dep(data, 'spr')
     d = {}
     for name, group in data.groupby(['ID','year']):
         d['group_' + str(name)] = group  # group is a dataframe containing information about ONLY ONE BIRD
@@ -182,9 +205,10 @@ def main():
     new_df = pd.DataFrame([])
     for key in d:
         new_df = new_df.append(d[key])
-    season = 'spr'
-    new_df.to_csv(sys.argv[3],index = False)
-    #all_birds_map(data, f'{season}_ad_non_stationary_migration_map', season)
+    season = 'aut'
+    #new_df.to_csv(sys.argv[3],index = False)
+    data_loc = pd.read_csv(sys.argv[3])
+    #all_birds_map(data, f'{season}_all_indiv_test', season, data_loc)
 
 
 if __name__ == "__main__":
