@@ -33,6 +33,7 @@ import mplleaflet
 import math 
 from geopy.distance import Point
 from geopy.distance import geodesic
+import start_mapping_dist
 
 def calculate_distance(cA, cB):
     """
@@ -79,7 +80,7 @@ def prepare_dataset(data, season, indiv):
     Function to drop duplicates of 'modelat' and 'modelon' column
     """
     data_indiv = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season)\
-         & (data['Juv'] == 1) & (data['ID'] == indiv)]
+        & (data['ID'] == indiv)] #  & (data['Juv'] == 1) solo per i giovani
     # Remove modelat and modelon duplicates
     data_indiv = data_indiv.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     return data_indiv
@@ -292,9 +293,13 @@ def interpolate_coords(data_indiv, limit):
         distance_within_segment = min(distance * point, line.s13)
         interpolated_points = line.Position(distance_within_segment, Geodesic.STANDARD | Geodesic.LONG_UNROLL)
         latitude = interpolated_points['lat2']
-        if (np.isclose(latitude, limit)) & (i == 0): # only take the first coordinate with latitude similar
+        id = data_indiv['ID'].unique()
+        #print(f'latitude of {id}', latitude)
+        #print(f'Interpolated coordinates of individual {id}\n',(interpolated_points['lat2'], interpolated_points['lon2']))
+        # increasing absolute tolerance
+        if (np.isclose(latitude, limit, atol=1e-4)) & (i == 0): # only take the first coordinate with latitude similar
             # to the limit (45N or 17N)
-            #print('Interpolated coordinates\n',(interpolated_points['lat2'], interpolated_points['lon2']))
+            print(f'Interpolated coordinates of individual {id}\n',(interpolated_points['lat2'], interpolated_points['lon2']))
             points.append((interpolated_points['lat2'], interpolated_points['lon2']))
             i += 1
     return points[0] # in format list of tuple [(lat, long)], points[0] = (lat, long)
@@ -361,33 +366,49 @@ def calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, dat
 
 def main():
     if len(sys.argv) < 1:
-        exit('python3.9 os/one_way_dist.py output_files/tracks_with_dist.csv output_files/tracks_rand_loc.csv output_files/random_loc_5LK.csv')
+        exit('python3.9 os/one_way_dist.py output_files/tracks_with_dist.csv input_files/individuals.xlsx')
     pd.set_option('display.max_rows', None)
     warnings.filterwarnings("ignore")
     data = pd.read_csv(sys.argv[1])
+    individuals = pd.read_excel(sys.argv[2])
     data['date_time'] = pd.to_datetime(data['date_time'])
 
-    # Season
-    season = 'spr'
+    data_adults = start_mapping_dist.get_adults_with_compl_migr(data, individuals)
+
     # Only consider juveniles with complete tracks 
-    data = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)]
+    season = 'spr'
+    data_juv = data[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)]
+    # Only consider adults of the same year (=2011), population (=0), and country (=CH) of the juveniles.
+    #data_adults = data_adults.loc[data_adults['pop_ch_2011_compl_migr'] == 1]
     # Number of equally distanced points
     n_samples = 20
     # Individuals used for calculating one-way-distance
-    bird_id = data['ID'].unique()
+    bird_id = data_juv['ID'].unique()
+    print('this is bird_id', bird_id)
     list_one_way_distance = []
     for first_individual in bird_id:
-        print('This is the first individual used: ', first_individual)
-        points_indiv_1, data_indiv_1 = prepare_datasets(data, season, n_samples, first_individual)
+        season = 'spr'
+        print('This is the first individual used: ', first_individual, 'and this is the season: ', season)
+        index_first_individual = np.where(bird_id == first_individual)[0]
+        print('index first individual', index_first_individual)
+        # Remember to add data[Juv] == 1 when working with juveniles and remove it when working with adults
+        points_indiv_1, data_indiv_1 = prepare_datasets(data_adults, season, n_samples, first_individual)
         for index in range(0,len(bird_id)):
-            print('This is the index', index)
-            second_individual = bird_id[index]
-            print('This is the next individual used: ,', second_individual)
-            points_indiv_2, data_indiv_2 = prepare_datasets(data, season, n_samples, second_individual) # take the next individual
-            final_one_way_distance = calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, data_indiv_2)
-            list_one_way_distance.append(final_one_way_distance)
+            if index == index_first_individual: # only calculate one-way distance for the same individual
+                season = 'aut'
+                print('This is the index', index)
+                second_individual = bird_id[index]
+                print('This is the next individual used: ', second_individual, 'and this is the season: ', season)
+                points_indiv_2, data_indiv_2 = prepare_datasets(data_adults, season, n_samples, second_individual) # take the next individual
+                final_one_way_distance = calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, data_indiv_2)
+                list_one_way_distance.append(final_one_way_distance)
+            else:
+                continue
     final_one_way_dist_list = [i for i in list(set(list_one_way_distance)) if i != 0]
     print('list one-way distance', final_one_way_dist_list)
+    juv_spr_aut = pd.DataFrame({'juv_spr_aut': final_one_way_dist_list})
+    print(juv_spr_aut)
+    juv_spr_aut.to_csv(sys.argv[3], index = False)
     #[for first_individual in bird_id]
     #[min([calculate_distance(i,j) for j in points_indiv_2]) for i in points_indiv_1]
 
