@@ -84,35 +84,60 @@ def calculate_avrg_migr_dep(data, season):
     start_migr['julian_day_start_migr'] = start_migr['date_time_dt'].apply(lambda x: (x.timetuple().tm_yday) % 365)
     print(f'mean departure {season} migration\n', start_migr['julian_day_start_migr'].mean())
 
-def get_adults_with_compl_migr(data, individuals):                                   
+def get_adults_with_compl_migr(data, individuals):
+    """
+    I am creating columns in the original dataframe to define different adult populations. The year in the name of the
+    columns refers to WHEN the individual was tagged. These columns only refer to adults with BOTH spring and autumn
+    migration tracks.
+    """                                   
     list_ad_autumn = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index()['ID']
-    print('Number of adults with complete autumn migration\n', list_ad_autumn, 'in total', len(list_ad_autumn))
+    #print('Number of adults with complete autumn migration\n', list_ad_autumn, 'in total', len(list_ad_autumn))
+    list_ad_autumn_column = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1), 'ID'].unique()
     list_ad_spring = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index()['ID']
-    data['adults_aut_compl_migr'] = np.where(data['ID'].isin(list_ad_autumn), 1, 0)
-    data['adults_spr_compl_migr'] = np.where(data['ID'].isin(list_ad_spring), 1, 0)
-    print('Number of adults with complete spring migration\n', list_ad_spring, 'in total', len(list_ad_spring))
-    print(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]), 'how many individuals?', len(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]))) # 3TR on 5th row in spring but not aut, 5AY on 6th row in spring but not aut
-    print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
-    print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
-    print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
-    print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
-    # 'repeated' == 1 column is useless, no idea what it means... some individuals that have both spring and autumn migration do not have the value 1 of the column 'repeated'
-    pop_ch_2010 = list(list_ad_spring[0])
-    pop_it_1_2010 = list(list_ad_spring[1])
-    pop_it_2_2010 = list(list_ad_spring[2])
-    pop_ch_2011 = list(list_ad_spring[3])
-    pop_it_1_2011 = list(list_ad_autumn[4])
-    pop_it_2_2011 = list(list_ad_spring[5])
-    pop_it_2_2011 = [i for i in pop_it_2_2011 if i != '5AY'] # remove individual 5AY
-    pop_it_1_2012 = list(list_ad_spring[6])
-    data['pop_ch_2010_compl_migr'] = np.where(data['ID'].isin(pop_ch_2010), 1, 0)
-    data['pop_it_1_2010_compl_migr'] = np.where(data['ID'].isin(pop_it_1_2010), 1, 0)
-    data['pop_it_2_2010_compl_migr'] = np.where(data['ID'].isin(pop_it_2_2010), 1, 0)
-    data['pop_ch_2011_compl_migr'] = np.where(data['ID'].isin(pop_ch_2011), 1, 0)
-    data['pop_it_1_2011_compl_migr'] = np.where(data['ID'].isin(pop_it_1_2011), 1, 0)
-    data['pop_it_2_2011_compl_migr'] = np.where(data['ID'].isin(pop_it_2_2011), 1, 0)
-    data['pop_it_1_2012_compl_migr'] = np.where(data['ID'].isin(pop_it_1_2012), 1, 0)
-    print('Juveniles!!!\n', individuals.loc[(individuals['Juv'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
+    list_ad_spring_column = individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1), 'ID'].unique()
+    data['adults_aut_compl_migr'] = np.where(data['ID'].isin(list_ad_autumn_column), 1, 0)
+    data['adults_spr_compl_migr'] = np.where(data['ID'].isin(list_ad_spring_column), 1, 0)
+    # Adults with repeated tracks
+    repeated_tracks = individuals.loc[individuals['repeated'] == 1, 'RING'].unique()
+    #print('unique rings repeated tracks\n', repeated_tracks)
+    #print(data['RING'].unique())
+    data['repeated_tracks'] = np.where(data['RING'].isin(repeated_tracks), 1, 0)
+    #print('Number of adults with complete spring migration\n', list_ad_spring, 'in total', len(list_ad_spring))
+    #print(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]), 'how many individuals?', len(np.setdiff1d(list_ad_autumn[6], list_ad_spring[6]))) # 3TR on 5th row in spring but not aut, 5AY on 6th row in spring but not aut
+    #print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
+    #print('Group by year, pop and country autumn\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_aut_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
+    #print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
+    #print('Group by year, pop and country spring\n', individuals.loc[(individuals['Juv'] == 0) & (individuals['compl_spr_track'] == 1)].groupby(['Year','Country','Pop'])['ID'].nunique().reset_index())
+    # Classify the individuals by population, year and season of migration track
+    pop_ch_2010_spr = list(list_ad_spring[0])
+    pop_ch_2010_aut = list(list_ad_autumn[0])
+    pop_it_1_2010_spr = list(list_ad_spring[1])
+    pop_it_1_2010_aut = list(list_ad_autumn[1])
+    pop_it_2_2010_spr = list(list_ad_spring[2])
+    pop_it_2_2010_aut = list(list_ad_autumn[2])
+    pop_ch_2011_spr = list(list_ad_spring[3])
+    pop_ch_2011_aut = list(list_ad_autumn[3])
+    pop_it_1_2011_spr = list(list_ad_spring[4])
+    pop_it_1_2011_aut = list(list_ad_autumn[4])
+    pop_it_2_2011_spr = list(list_ad_spring[5])
+    pop_it_2_2011_aut = list(list_ad_autumn[5])
+    pop_it_1_2012_spr = list(list_ad_spring[6])
+    pop_it_1_2012_aut = list(list_ad_autumn[6])
+    data['pop_ch_2010_spr'] = np.where(data['ID'].isin(pop_ch_2010_spr), 1, 0)
+    data['pop_ch_2010_aut'] = np.where(data['ID'].isin(pop_ch_2010_aut), 1, 0)
+    data['pop_it_1_2010_spr'] = np.where(data['ID'].isin(pop_it_1_2010_spr), 1, 0)
+    data['pop_it_1_2010_aut'] = np.where(data['ID'].isin(pop_it_1_2010_aut), 1, 0)
+    data['pop_it_2_2010_spr'] = np.where(data['ID'].isin(pop_it_2_2010_spr), 1, 0)
+    data['pop_it_2_2010_aut'] = np.where(data['ID'].isin(pop_it_2_2010_aut), 1, 0)
+    data['pop_ch_2011_spr'] = np.where(data['ID'].isin(pop_ch_2011_spr), 1, 0)
+    data['pop_ch_2011_aut'] = np.where(data['ID'].isin(pop_ch_2011_aut), 1, 0)
+    data['pop_it_1_2011_spr'] = np.where(data['ID'].isin(pop_it_1_2011_spr), 1, 0)
+    data['pop_it_1_2011_aut'] = np.where(data['ID'].isin(pop_it_1_2011_aut), 1, 0)
+    data['pop_it_2_2011_spr'] = np.where(data['ID'].isin(pop_it_2_2011_spr), 1, 0)
+    data['pop_it_2_2011_aut'] = np.where(data['ID'].isin(pop_it_2_2011_aut), 1, 0)
+    data['pop_it_1_2012_spr'] = np.where(data['ID'].isin(pop_it_1_2012_spr), 1, 0)
+    data['pop_it_1_2012_aut'] = np.where(data['ID'].isin(pop_it_1_2012_aut), 1, 0)
+    #print('Juveniles!!!\n', individuals.loc[(individuals['Juv'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
     return data
 
 def setting_up_the_map(ax):
@@ -138,7 +163,7 @@ def all_birds_map(data, save_fig, season):
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
     # Set the background of the map
-    ax.set_extent((-20.0, 43.0, 55.0, -37.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    ax.set_extent((-20.0, 35.0, 55.0, -34.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -153,8 +178,8 @@ def all_birds_map(data, save_fig, season):
                 x = country.geometry.centroid.x       
                 y = country.geometry.centroid.y
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
-    #data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
-    data = data.loc[data['pop_it_1_2012_compl_migr'] == 1]
+    data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
+    data = data.loc[data['pop_ch_2010_compl_migr'] == 1]
     # & (data['Juv'] == 1)]
     # Drop NaN values in modelat and modelon columns
     #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
@@ -173,7 +198,7 @@ def all_birds_map(data, save_fig, season):
             ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
-    plt.legend(fontsize='small', loc="upper left")
+    #plt.legend(fontsize='small', loc="upper left")
     plt.savefig('output_files/images/'+save_fig+'.png', dpi=500, format='jpg', bbox_inches="tight")
     plt.show()
 
@@ -201,10 +226,10 @@ def main():
     new_df = pd.DataFrame([])
     for key in d:
         new_df = new_df.append(d[key])
-    season = 'aut'
+    season = 'spr'
     #new_df.to_csv(sys.argv[3],index = False)
-    data_loc = pd.read_csv(sys.argv[3])
-    #all_birds_map(data, f'{season}_test_diff_pop', season)
+    #data_loc = pd.read_csv(sys.argv[3])
+    #all_birds_map(data, f'{season}_map_without_legend', season)
 
 
 if __name__ == "__main__":
