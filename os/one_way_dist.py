@@ -34,6 +34,7 @@ import math
 from geopy.distance import Point
 from geopy.distance import geodesic
 import start_mapping_dist
+import random
 
 def calculate_distance(cA, cB):
     """
@@ -365,27 +366,34 @@ def calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, dat
 
 def for_loop_one_way_distance(data1, data2, bird_id1, bird_id2, season, n_samples):
     """
-    for loop to calculate a OWD matrix between various individuals
+    for loop to calculate a OWD matrix between various individuals. It takes the season I want the tracks to be in,
+    the number of equally-distanced points I want to use when calculating the OWD, the two datasets (if we're considering
+    different datasets, such as adults versus juveniles) and the two lists of individual IDs to use
     """
     list_one_way_distance = []
-    # Objective: calculate one-way distance between adults and individual of the same population and year for spring
-    # and for autumn
-    #bird_id2 = bird_id1
-    #data2 = data1
+    list_first_individual = []
+    list_second_individual = []
+    # Objective: calculate one-way distance between individuals with repeated tracks
+    data2 = data1
     for first_individual in bird_id1:
-        season = 'spr'
+        #season = 'aut'
         print('This is the first individual used: ', first_individual, 'and this is the season: ', season)
         # Remember to add data[Juv] == 1 when working with juveniles and remove it when working with adults
         points_indiv_1, data_indiv_1 = prepare_datasets(data1, season, n_samples, first_individual) # juv_or_ad = 0)
         #index_first_individual = np.where(bird_id1 == first_individual)[0]
-        #print('index first individual', index_first_individual)
+        # this is to get indexes in lists instead of numpy arrays: 
+        #index_first_individual = bird_id1.index(first_individual)
+        #print('index first individual', index_first_individual, bird_id1)
         for index in range(0,len(bird_id2)):
             # to calculate owd on the same individual, for example between spring and autumn migration
             #if index == index_first_individual:
-            #season = 'aut'
             print('This is the index', index)
             second_individual = bird_id2[index]
             print('This is the next individual used: ', second_individual, 'and this is the season: ', season)
+            ring_first_individual = data1.loc[data1['ID'] == first_individual, 'RING'].iloc[0]
+            list_first_individual.append(ring_first_individual)
+            ring_second_individual = data2.loc[data2['ID'] == second_individual, 'RING'].iloc[0]
+            list_second_individual.append(ring_second_individual)
             points_indiv_2, data_indiv_2 = prepare_datasets(data2, season, n_samples, second_individual) # juv_or_ad = 0) # take the next individual
             final_one_way_distance = calculate_one_way_distance(points_indiv_1, points_indiv_2, data_indiv_1, data_indiv_2)
             list_one_way_distance.append(final_one_way_distance)
@@ -393,7 +401,7 @@ def for_loop_one_way_distance(data1, data2, bird_id1, bird_id2, season, n_sample
                 #continue
     # Remove 0s and duplicates from final one-way distance list
     #final_one_way_dist_list = [i for i in list(set(list_one_way_distance)) if i != 0]
-    return list_one_way_distance
+    return list_one_way_distance, list_first_individual, list_second_individual
 
 
 def main():
@@ -404,52 +412,59 @@ def main():
     data = pd.read_csv(sys.argv[1])
     individuals = pd.read_excel(sys.argv[2])
     data['date_time'] = pd.to_datetime(data['date_time'])
+    data['real_year'] = data['date_time'].dt.year
 
+    # longitude 9,38333333333333
+    # latitude 45,2833333333333
+    # prog_number = 38080
+    data.loc[data['prog_number'] == 38080, 'modelat'] = 45.2833333333333
+    data.loc[data['prog_number'] == 38080, 'modelon'] = 9.38333333333333
+    data.to_csv(sys.argv[3], index = False)
+
+ 
     data_adults = start_mapping_dist.get_adults_with_compl_migr(data, individuals)
-    
-    season = 'spr'
-    data_juv = data[(data['Juv'] == 1)]
-    # Only consider adults of the same year (=2011), population (=0), and country (=CH) of the juveniles.
-    adults_ch_2011 = data_adults.loc[data_adults['pop_ch_2011_compl_migr'] == 1]
-    adults_ch_2010 = data_adults.loc[data_adults['pop_ch_2010_compl_migr'] == 1]
-    ad_it_1_2010 = data_adults.loc[data_adults['pop_it_1_2010_compl_migr'] == 1]
-    ad_it_1_2011 = data_adults.loc[data_adults['pop_it_1_2011_compl_migr'] == 1]
-    ad_it_2_2010 = data_adults.loc[data_adults['pop_it_2_2010_compl_migr'] == 1]
-    ad_it_2_2011 = data_adults.loc[data_adults['pop_it_2_2011_compl_migr'] == 1]
+    #print('Adults with repeated tracks (ring identification)\n', 
+    #data_adults.loc[data_adults['repeated_tracks'] == 1].groupby(['RING', 'season'])['real_year'].unique())
+    print('Category of individuL 5HC\n', data_adults.loc[data_adults['ID'] == '5HC'].iloc[0])
+    season = 'aut'
 
-    print('adults ch 2010', adults_ch_2010.groupby(adults_ch_2010['date_time'].dt.year)['ID'].nunique().reset_index())
-    print('adults ch 2011', adults_ch_2011.groupby(adults_ch_2011['date_time'].dt.year)['ID'].nunique().reset_index())
-    print('adults it 1 2010', ad_it_1_2010.groupby(ad_it_1_2010['date_time'].dt.year)['ID'].nunique().reset_index())
-    print('adults it 1 2011', ad_it_1_2011.groupby(ad_it_1_2011['date_time'].dt.year)['ID'].nunique().reset_index())
-    print('adults it 2 2010', ad_it_2_2010.groupby(ad_it_2_2010['date_time'].dt.year)['ID'].nunique().reset_index())
-    print('adults it 2 2011', ad_it_2_2011.groupby(ad_it_2_2011['date_time'].dt.year)['ID'].nunique().reset_index())
-    ad_compl_aut = data_adults.loc[(data_adults['adults_aut_compl_migr'] == 1) & (data['season'] == 'aut')].groupby(data_adults['date_time'].dt.year)['ID'].unique().reset_index()
-    ad_compl_spr = data_adults.loc[(data_adults['adults_spr_compl_migr'] == 1) & (data['season'] == 'spr')].groupby(data_adults['date_time'].dt.year)['ID'].unique().reset_index()
-    print('all adults with complete spring migration\n', ad_compl_spr['ID'])
-    print('all adults with complete autumn migration\n', ad_compl_aut['ID'])
-    ad_compl_aut = ad_compl_aut['ID']
-    ad_compl_spr = ad_compl_spr['ID']
+    # Repeated tracks matrix - non-repeated tracks matrix SPRING
+    # CHANGE COLUMN NAME FOR EACH SEASON AND POP AND YEAR!
+    data_adults_first = data_adults.loc[(data_adults['pop_it_1_2011_aut'] == 1)]
+    data_adults_second = data_adults.loc[(data_adults['pop_it_1_2012_aut'] == 1)]
+    print('These are the bird IDs at the beginning\n', data_adults_first['ID'].unique(), data_adults_second['ID'].unique())
 
-    print(list(set(ad_compl_spr[0]).intersection(set(ad_compl_spr[1]))), 'how many individuals?', len(list(set(ad_compl_spr[0]).intersection(set(ad_compl_spr[1])))))
-    # Merge adults and juveniles
-    #merged_df_ad_juv = pd.concat([data_juv, data_adults], axis = 0)
-    #print('merged df adults juveniles\n', merged_df_ad_juv.tail(), merged_df_ad_juv['ID'].unique())
-    #bird_id_merged_df = merged_df_ad_juv['ID'].unique()
     # Number of equally distanced points
     n_samples = 20
-    # Juveniles used to calculate one-way-distance
-    bird_id_juv = data_juv['ID'].unique()
-    # Adults used to calculate one-way distance
-    bird_id_adults = data_adults['ID'].unique()
-    print('This is bird_id juveniles', bird_id_juv)
-    print('This is bird_id adults', bird_id_adults)
-    #final_one_way_dist_list = for_loop_one_way_distance(merged_df_ad_juv, merged_df_ad_juv, bird_id_merged_df, bird_id_merged_df, season, n_samples)
-    #print('list one-way distance', final_one_way_dist_list)
-    #juv_spr_aut = pd.DataFrame({'one_way_distance': final_one_way_dist_list})
-    #print(juv_spr_aut)
-    #juv_spr_aut.to_csv(sys.argv[3], index = False)
-    #[for first_individual in bird_id]
-    #[min([calculate_distance(i,j) for j in points_indiv_2]) for i in points_indiv_1]
+    # Only for individuals with repeated migratory routes
+    # Make sure individuals' first spring track is in the same order as individuals' second spring track
+    #myorder = [0,1,2]
+    #repeated_tracks_first = list(data_adults_first['ID'].unique())
+    #repeated_tracks_first = [repeated_tracks_first[i] for i in myorder]
+    #repeated_tracks_second = list(data_adults_second['ID'].unique())
+    #repeated_tracks_second = [i for i in repeated_tracks_second if i != '3SS']
+    #myorder2 = [2,0,1]
+    #repeated_tracks_second = [repeated_tracks_second[i] for i in myorder2]
+    data_adults_first = list(data_adults_first['ID'].unique())
+    data_adults_first = data_adults_first
+    data_adults_second = list(data_adults_second['ID'].unique())
+    print('These are the bird IDs just before calculating OWD\n', data_adults_first, data_adults_second)
+    final_one_way_dist_list, list_first_individual, list_second_individual = for_loop_one_way_distance(
+        data_adults, data_adults, data_adults_first, data_adults_second, season, n_samples)
+    # Create the final dataframe
+    final_df = pd.DataFrame({'one_way_distance':final_one_way_dist_list})
+    final_df['first_indiv'] = list_first_individual
+    final_df['second_indiv'] = list_second_individual
+    final_df['season'] = season
+    final_df['pop_year'] = 'pop_it_1_2011_2012'
+    final_df['same_individual'] = np.where(final_df['first_indiv'] == final_df['second_indiv'], 1, 0)
+    # Create columns with year of individuals
+    list_year_2010 = individuals.loc[(individuals['Juv'] == 0) & (individuals['Year'] == 2011), 'RING'].unique()
+    list_year_2011 = individuals.loc[(individuals['Juv'] == 0) & (individuals['Year'] == 2012), 'RING'].unique()
+    final_df['first_indiv_year'] = np.where(final_df['first_indiv'].isin(list_year_2010), 2011, 0)
+    final_df['second_indiv_year'] = np.where(final_df['second_indiv'].isin(list_year_2011), 2012, 0)
+    print(final_df)
+    final_df.to_csv(sys.argv[3], index = False)
 
     #merged_df = create_df_with_points(points_df_1, points_df_2, tot_dist_indiv_1, tot_dist_indiv_2)
     #merged_df.to_csv(sys.argv[2], index = False)
