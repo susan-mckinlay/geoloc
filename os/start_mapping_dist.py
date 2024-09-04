@@ -85,27 +85,35 @@ def calculate_avrg_migr_dep(data, season):
     return start_migr
 
 def t_test_phenology(start_migr_adults, start_migr_juv):
+    """
+    It performs a two-sample or paired t-test between two variable sets (juveniles vs adults or first track vs second track)
+    """
  
-    juv_dep = start_migr_juv['julian_day_start_migr']
-    adult_dep = start_migr_adults['julian_day_start_migr']
+    juv_dep = start_migr_juv['spr_mig_dur']
+    adult_dep = start_migr_adults['spr_mig_dur']
+
+    print(juv_dep)
+    print(adult_dep)
 
     # Check normal distribution
     print(stats.shapiro(juv_dep))
     print(stats.shapiro(adult_dep))
 
     # Perform the t-test:
-    t_stat, p_value = stats.ttest_ind(juv_dep, adult_dep)
+    # When we have measurements from the same people in both data sets (a within-subjects. design), we need to account for this, or the t test will again suggest an inflated (incorrect) value. 
+    # We account for this by using a paired t test. 
+    t_stat, p_value = stats.ttest_rel(juv_dep, adult_dep)
+
+    # stats.ttest_ind() is for non-paired t-tests -> This means that t tests assume there is no relationship between any particular measurement in each of the two data sets being compared. 
 
     # Interpret the results:
     alpha = 0.05
     if p_value < alpha:
         print("Reject the null hypothesis; there is a significant difference between the departure dates of juvenile and adult barn swallows.", p_value)
     else:
-        print("Fail to reject the null hypothesis; there is no significant difference between the departure dates of juvenile and adult barn swallows.", p_value)
+        print("Fail to reject the null hypothesis; there is no significant difference between the spring migration distances of juvenile and adult barn swallows.", p_value)
 
     # Spring departure and arrival dates are signficantly different between juvenile and adult barn swallows
-
-
 
 def get_adults_with_compl_migr(data, individuals):
     """
@@ -186,7 +194,7 @@ def all_birds_map(data, save_fig, season):
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
     # Set the background of the map
-    ax.set_extent((-20.0, 35.0, 55.0, -34.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    ax.set_extent((-20.0, 35.0, 55.0, -30.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -194,7 +202,7 @@ def all_birds_map(data, save_fig, season):
     reader = shpreader.Reader(shpfilename)
     # Add names of some countries on map
     countries = reader.records()
-    list_countries = ['Ukraine', 'Germany', 'Libya']
+    list_countries = ['Ukraine', 'Germany', 'Egypt']
     for country in countries:
         for i in list_countries:
             if country.attributes['NAME'] == i:
@@ -202,24 +210,29 @@ def all_birds_map(data, save_fig, season):
                 y = country.geometry.centroid.y
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     #data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
-    #data = data.loc[data['pop_ch_2010_compl_migr'] == 1]
-    data = data.loc[data['repeated'] == 1]
+    #data = data.loc[(data['pop_ch_2011_{season}'] == 1)]
+    data = data.loc[data['season'] == season]
+    data_adults = data.loc[data['pop_ch_2011_'+season] == 1]
+    data_juv = data.loc[(data['Juv'] == 1)]
     # & (data['Juv'] == 1)]
     # Drop NaN values in modelat and modelon columns
     #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
-    bird_id = data['RING'].unique()
+    bird_id = data['ID'].unique()
     print('total number of birds is', len(bird_id), bird_id)
     # I need to choose a proper set of colors
-    ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
+    #ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
     for bird in bird_id:
         try:
-            x = data.loc[(data['RING'] == bird), 'modelon']
-            y = data.loc[(data['RING'] == bird), 'modelat']
+            x = data_adults.loc[(data_adults['ID'] == bird), 'modelon']
+            y = data_adults.loc[(data_adults['ID'] == bird), 'modelat']
+            x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
+            y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
             # ccrs.PlateCarree()
-            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) # to use dictionary for colors: , color = colors[bird]
-            ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
+            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'darkviolet') # label = bird) # to use dictionary for colors: , color = colors[bird]
+            ax.plot(x2,y2,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'hotpink') #, label = bird)
+            #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
     #plt.legend(fontsize='small', loc="upper left")
@@ -239,9 +252,9 @@ def main():
     data['modelon'] = data['modelon'].astype(float)
     data = data.sort_values(by = ['ID','date_time'])
     individuals = pd.read_excel(sys.argv[2])
-    print('Average number of stationary periods adults')
-    print(individuals.loc[(individuals['Juv'] == 0) & (individuals['Country'] == 'CH') & (individuals['Year'] == 2011), 'consec_dist_spr'].describe())
-    print('Average number of stationary periods juveniles \n', individuals.loc[individuals['Juv'] == 1, 'consec_dist_spr'].describe())
+    #print('Average number of stationary periods adults')
+    #print(individuals.loc[(individuals['Juv'] == 0) & (individuals['Country'] == 'CH') & (individuals['Year'] == 2011), 'consec_dist_spr'].describe())
+    #print('Average number of stationary periods juveniles \n', individuals.loc[individuals['Juv'] == 1, 'consec_dist_spr'].describe())
     data = get_adults_with_compl_migr(data, individuals)
     data = fix_prog_tot_col(data)
     data = data.dropna(subset = ['modelat','modelon'])
@@ -253,20 +266,24 @@ def main():
     new_df = pd.DataFrame([])
     for key in d:
         new_df = new_df.append(d[key])
-    season = 'aut'
+    season = 'spr'
     data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['repeated_tracks'] == 1) & (data['pop_it_1_2010_aut'])]
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
     start_migr_adults['group'] = 'adult'
+    list_aut_ch = data.loc[data['pop_ch_2011_spr'] == 1, 'RING'].unique()
+    print('Adult of ch_2011 that only has autumn migration and no spring migration\n', set(list(data.loc[data['pop_ch_2011_aut'] == 1, 'RING'].unique())).difference(list_aut_ch))
     # I need to ifnd a way to exclude the individual with repeated tracks pop_it_2011_2012_qut
     data_juv = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['repeated_tracks'] == 1) & (data['pop_it_1_2011_aut'])]
     start_migr_juv = calculate_avrg_migr_dep(data_juv, season)
     start_migr_juv['group'] = 'juvenile'
-    individuals_adults = individuals.loc[individuals['Juv'] == 0]
-    individuals_juveniles = individuals.loc[individuals['Juv'] == 1]
-    #t_test_phenology(start_migr_adults, start_migr_juv)
+    # Individual with just autumn migration and no spring migration is individual with ring B366688
+    #individuals_adults = individuals.loc[(individuals['Juv'] == 0) & (individuals['Country'] == 'CH') & (individuals['Year'] == 2011) & (individuals['RING'] != 'B366688')]
+    individuals_repeated_first_y = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 1)]
+    individuals_repeated_second_y = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 2)]
+    #t_test_phenology(individuals_repeated_first_y, individuals_repeated_second_y)
     #new_df.to_csv(sys.argv[3],index = False)
     #data_loc = pd.read_csv(sys.argv[3])
-    #all_birds_map(individuals, f'{season}_map_wintering_locations', season)
+    all_birds_map(data, f'{season}_map_adults_juveniles', season)
 
 
 if __name__ == "__main__":
