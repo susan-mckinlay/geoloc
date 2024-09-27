@@ -89,8 +89,8 @@ def t_test_phenology(start_migr_adults, start_migr_juv):
     It performs a two-sample or paired t-test between two variable sets (juveniles vs adults or first track vs second track)
     """
  
-    juv_dep = start_migr_juv['spr_mig_dur']
-    adult_dep = start_migr_adults['spr_mig_dur']
+    juv_dep = start_migr_juv['julian_day_start_migr']
+    adult_dep = start_migr_adults['julian_day_start_migr']
 
     print(juv_dep)
     print(adult_dep)
@@ -102,14 +102,15 @@ def t_test_phenology(start_migr_adults, start_migr_juv):
     # Perform the t-test:
     # When we have measurements from the same people in both data sets (a within-subjects. design), we need to account for this, or the t test will again suggest an inflated (incorrect) value. 
     # We account for this by using a paired t test. 
-    t_stat, p_value = stats.ttest_rel(juv_dep, adult_dep)
+    t_stat, p_value = stats.ttest_ind(juv_dep, adult_dep)
 
     # stats.ttest_ind() is for non-paired t-tests -> This means that t tests assume there is no relationship between any particular measurement in each of the two data sets being compared. 
+    # paired t-test stats.ttest_rel()
 
     # Interpret the results:
     alpha = 0.05
     if p_value < alpha:
-        print("Reject the null hypothesis; there is a significant difference between the departure dates of juvenile and adult barn swallows.", p_value)
+        print("Reject the null hypothesis; there is a significant difference between the departure dates of juvenile and adult barn swallows.", p_value, t_stat)
     else:
         print("Fail to reject the null hypothesis; there is no significant difference between the spring migration distances of juvenile and adult barn swallows.", p_value)
 
@@ -168,8 +169,42 @@ def get_adults_with_compl_migr(data, individuals):
     data['pop_it_2_2011_aut'] = np.where(data['ID'].isin(pop_it_2_2011_aut), 1, 0)
     data['pop_it_1_2012_spr'] = np.where(data['ID'].isin(pop_it_1_2012_spr), 1, 0)
     data['pop_it_1_2012_aut'] = np.where(data['ID'].isin(pop_it_1_2012_aut), 1, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_ch_2010_spr), 'pop_ch_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_ch_2010_spr), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_ch_2010_aut), 'pop_ch_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_ch_2010_aut), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2010_spr), 'pop_it_1_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2010_spr), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2010_aut),'pop_it_1_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2010_aut), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_2_2010_spr), 'pop_it_2_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_2_2010_spr), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_2_2010_aut), 'pop_it_2_2010', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_2_2010_aut), 2010, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_ch_2011_spr), 'pop_ch_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_ch_2011_spr), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_ch_2011_aut), 'pop_ch_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_ch_2011_aut), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2011_spr), 'pop_it_1_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2011_spr), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2011_aut), 'pop_it_1_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2011_aut), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_2_2011_spr), 'pop_it_2_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_2_2011_spr), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_2_2011_aut), 'pop_it_2_2011', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_2_2011_aut), 2011, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2012_spr), 'pop_it_1_2012', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2012_spr), 2012, 0)
+    data['pop'] = np.where(data['ID'].isin(pop_it_1_2012_aut), 'pop_it_1_2012', 0)
+    data['year'] = np.where(data['ID'].isin(pop_it_1_2012_aut), 2012, 0)
+
     #print('Juveniles!!!\n', individuals.loc[(individuals['Juv'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
     return data
+
+#def age_and_pop_column(id, data):
+    # Classify the individuals by population, year and season of migration track
+    #if id.isin(pop_ch_2010_spr)
+
 
 def setting_up_the_map(ax):
     fname = os.path.join('/Users/susanellenmckinlay/Documents/python/woodcock/input_files/tif_files/', 'HYP_HR_SR_W.tif')
@@ -185,6 +220,8 @@ def setting_up_the_map(ax):
     grid_lines = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels = True, zorder = 1)
     grid_lines.top_labels = False
     grid_lines.right_labels = False
+    # I am tring to highlight the parallel N 17
+    ax.gridlines(draw_labels=False, xlocs=[], ylocs=[17], linestyle='--', color = 'black')
     grid_lines.xformatter = LONGITUDE_FORMATTER
     grid_lines.yformatter = LATITUDE_FORMATTER
     return ax
@@ -212,8 +249,15 @@ def all_birds_map(data, save_fig, season):
     #data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
     #data = data.loc[(data['pop_ch_2011_{season}'] == 1)]
     data = data.loc[data['season'] == season]
-    data_adults = data.loc[data['pop_ch_2011_'+season] == 1]
-    data_juv = data.loc[(data['Juv'] == 1)]
+    data = data.loc[(data['repeated_tracks'] == 1)]
+    data = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
+    data_first_year = data.loc[data['rep_year_first'] == 1]
+    print(data_first_year.head())
+    data_second_year = data.loc[data['rep_year_second'] == 1]
+    print(data_second_year.head())
+    #data = data.loc[(data['prog_number'] != 23971) & (data['prog_number'] != 23972) & (data['prog_number'] != 10455) & (data['prog_number'] != 10456)] #10455
+    #data_adults = data.loc[data['pop_ch_2011_'+season] == 1]
+    #data_juv = data.loc[(data['Juv'] == 1)]
     # & (data['Juv'] == 1)]
     # Drop NaN values in modelat and modelon columns
     #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
@@ -221,17 +265,20 @@ def all_birds_map(data, save_fig, season):
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['ID'].unique()
     print('total number of birds is', len(bird_id), bird_id)
+    print(data_first_year['RING'].unique())
     # I need to choose a proper set of colors
-    #ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
+    ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
     for bird in bird_id:
         try:
-            x = data_adults.loc[(data_adults['ID'] == bird), 'modelon']
-            y = data_adults.loc[(data_adults['ID'] == bird), 'modelat']
-            x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
-            y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
+            x = data_first_year.loc[(data_first_year['ID'] == bird), 'modelon']
+            y = data_first_year.loc[(data_first_year['ID'] == bird), 'modelat']
+            x2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelon']
+            y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
+            #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
+            #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
             # ccrs.PlateCarree()
-            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'darkviolet') # label = bird) # to use dictionary for colors: , color = colors[bird]
-            ax.plot(x2,y2,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'hotpink') #, label = bird)
+            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'darkslategrey') #color = 'orchid') # label = bird) # to use dictionary for colors: , color = colors[bird]
+            ax.plot(x2,y2,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = 'firebrick') #, label = bird)
             #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
@@ -241,10 +288,12 @@ def all_birds_map(data, save_fig, season):
 
 def main():
     if len(sys.argv) < 1:
-        exit('python3.9 os/start_mapping_dist.py input_files/tracks.csv input_files/individuals.xlsx output_files/random_loc_5LK.csv')
+        exit('python3.9 os/start_mapping_dist.py output_files/tracks_with_dist.csv input_files/individuals.xlsx output_files/random_loc_5LK.csv')
     pd.set_option('display.max_rows', None)
     warnings.filterwarnings("ignore")
-    data = pd.read_csv(sys.argv[1], sep = ';', na_values = ['NA','a'], decimal=',')
+    # This is for original track.csv file
+    #data = pd.read_csv(sys.argv[1], sep = ';', na_values = ['NA','a'], decimal=',')
+    data = pd.read_csv(sys.argv[1])
     data['date_time'] = pd.to_datetime(data['date_time'])
     data['modelat'] = data['modelat'].replace('NA', np.nan, regex=True)
     data['modelon'] = data['modelon'].replace('NA', np.nan, regex=True)
@@ -266,24 +315,37 @@ def main():
     new_df = pd.DataFrame([])
     for key in d:
         new_df = new_df.append(d[key])
-    season = 'spr'
-    data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['repeated_tracks'] == 1) & (data['pop_it_1_2010_aut'])]
+    season = 'aut'
+    data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['pop_ch_2011_'+season] == 1)] #& (data['repeated_tracks'] == 1)
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
     start_migr_adults['group'] = 'adult'
     list_aut_ch = data.loc[data['pop_ch_2011_spr'] == 1, 'RING'].unique()
-    print('Adult of ch_2011 that only has autumn migration and no spring migration\n', set(list(data.loc[data['pop_ch_2011_aut'] == 1, 'RING'].unique())).difference(list_aut_ch))
+    print('Adult of ch_2011 that only has autumn migration and no spring migration\n', set(list(data.loc[data['pop_ch_2011_'+season] == 1, 'RING'].unique())).difference(list_aut_ch))
     # I need to ifnd a way to exclude the individual with repeated tracks pop_it_2011_2012_qut
-    data_juv = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['repeated_tracks'] == 1) & (data['pop_it_1_2011_aut'])]
+    data_juv = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)] # &(data['pop_ch_2011'+season]
     start_migr_juv = calculate_avrg_migr_dep(data_juv, season)
     start_migr_juv['group'] = 'juvenile'
+    print('juv', start_migr_juv)
+    print('adults', start_migr_adults)
     # Individual with just autumn migration and no spring migration is individual with ring B366688
     #individuals_adults = individuals.loc[(individuals['Juv'] == 0) & (individuals['Country'] == 'CH') & (individuals['Year'] == 2011) & (individuals['RING'] != 'B366688')]
     individuals_repeated_first_y = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 1)]
     individuals_repeated_second_y = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 2)]
-    #t_test_phenology(individuals_repeated_first_y, individuals_repeated_second_y)
+    #print('hello\n',individuals_repeated_first_y.columns)
+    #print('second\n',individuals_repeated_second_y.columns)
+    adults = start_migr_juv.loc[start_migr_juv['group'] == 'adult']
+    juveniles = start_migr_juv.loc[start_migr_juv['group'] == 'juvenile']
+    #t_test_phenology(start_migr_adults, start_migr_juv)
     #new_df.to_csv(sys.argv[3],index = False)
     #data_loc = pd.read_csv(sys.argv[3])
-    all_birds_map(data, f'{season}_map_adults_juveniles', season)
+    first_year = individuals.loc[individuals['rep_year'] == 1, 'ID'].unique()
+    data['rep_year_first'] = np.where(data['ID'].isin(first_year), 1, 0)
+    second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
+    data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
+
+    #data['rep_year'] = [1 if x in first_year for x in data['year']]
+   
+    all_birds_map(data, f'{season}_map_repeated_tracks_correct', season)
 
 
 if __name__ == "__main__":
