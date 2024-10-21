@@ -94,8 +94,8 @@ def t_test_phenology(start_migr_adults, start_migr_juv):
     # from S Sahara (j_win_dep), arrival date to breeding colony (j_BParr), departure date from breeding colony (j_BPdep)
     # arrival date to S Sahara (j_win_arr)
     #  OWD between spring and autumn migration of same individual 
-    juv_dep = start_migr_juv['straight_spr']     #start_migr_juv['julian_day_start_migr']
-    adult_dep = start_migr_adults['straight_spr']     #start_migr_adults['julian_day_start_migr']
+    juv_dep = start_migr_juv['n_sp']     #start_migr_juv['julian_day_start_migr']
+    adult_dep = start_migr_adults['n_sp']     #start_migr_adults['julian_day_start_migr']
 
     print(juv_dep)
     print(adult_dep)
@@ -107,10 +107,11 @@ def t_test_phenology(start_migr_adults, start_migr_juv):
     # Perform the t-test:
     # When we have measurements from the same people in both data sets (a within-subjects. design), we need to account for this, or the t test will again suggest an inflated (incorrect) value. 
     # We account for this by using a paired t test. 
-    t_stat, p_value = stats.ttest_ind(juv_dep, adult_dep, equal_var = False)
+    t_stat, p_value = stats.ttest_ind(juv_dep, adult_dep, equal_var= False) # stats.ttest_ind(juv_dep, adult_dep, equal_var = False)
     result = stats.ttest_ind(juv_dep, adult_dep, equal_var = False)
-    # stats.ttest_ind() is for non-paired t-tests -> This means that t tests assume there is no relationship between any particular measurement in each of the two data sets being compared. 
-    # paired t-test stats.ttest_rel()
+    # stats.ttest_ind(equal_var = False) is for non-paired t-tests -> This means that t tests assume there is no relationship between any particular measurement in each of the two data sets being compared. 
+    # I use stats.ttest_ind() for t-tests between juveniles and adults
+    # paired t-test stats.ttest_rel() -> for t-tests performed between first and second track of the same individual
 
     # Interpret the results:
     alpha = 0.05
@@ -227,6 +228,9 @@ def all_birds_map(data, save_fig, season):
     #data = data.loc[data['season'] == season]
     # For maps of individuals with repeated tracks
     data = data.loc[(data['repeated'] == 1)] # column 'repeated' for wintering map, 'repeated_tracks' for all the others
+    # These individuals don't have wintering that is long enough:
+    data = data.loc[(data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
+    
     # These individuals only have double autumn migration:
     #data = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
     #data_first_year = data.loc[data['rep_year_first'] == 1]
@@ -258,7 +262,7 @@ def all_birds_map(data, save_fig, season):
             #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
             #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
             # ccrs.PlateCarree() to use dictionary for colors: color = color_dict[bird]
-            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, ) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
+            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
             #ax.plot(x2,y2,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
             ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
@@ -266,6 +270,24 @@ def all_birds_map(data, save_fig, season):
     #plt.legend(fontsize='small', loc="upper left")
     plt.savefig('output_files/images/'+save_fig+'.png', dpi=500, format='jpg', bbox_inches="tight")
     plt.show()
+
+def calculate_stopover_number(data_adults):
+    # Count number of stopovers (actually stationary periods during non-breeding)
+    # Replace empty spaces with False
+    data_adults['stationary'] = data_adults['stationary'].fillna(False)
+    # Group by 'ID' and shift the 'Stationary' column to check previous value
+    data_adults['prev_stationary'] = data_adults.groupby('RING')['stationary'].shift(1)
+    print(data_adults['stationary'].value_counts())
+    # Find where the previous value is False and current value is True
+    transition = (data_adults['prev_stationary'] == False) & (data_adults['stationary'] == True)
+    print(data_adults[transition]['typeofstopover'].value_counts())
+    print(data_adults['typeofstopover'].nunique())
+    # Count occurrences of True after False per RING
+    ad_n_stopovers = data_adults[transition].groupby('RING').size().reset_index()
+    print('sample size ring in df:', data_adults['RING'].nunique())
+    print('mean of number stopovers adults\n',ad_n_stopovers)
+    return ad_n_stopovers
+
 
 def main():
     if len(sys.argv) < 1:
@@ -298,18 +320,21 @@ def main():
     season = 'spr'
     data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['pop_ch_2011_'+season] == 1)] #& (data['repeated_tracks'] == 1)
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
-    start_migr_adults['group'] = 'adult'
+    start_migr_adults['group'] = 'adults'
     #list_aut_ch = data.loc[data['pop_ch_2011_spr'] == 1, 'RING'].unique()
     #print('Adult of ch_2011 that only has autumn migration and no spring migration\n', set(list(data.loc[data['pop_ch_2011_'+season] == 1, 'RING'].unique())).difference(list_aut_ch))
     # I need to ifnd a way to exclude the individual with repeated tracks pop_it_2011_2012_qut
     data_juv = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['Juv'] == 1)] # &(data['pop_ch_2011'+season]
     start_migr_juv = calculate_avrg_migr_dep(data_juv, season)
-    start_migr_juv['group'] = 'juvenile'
-    #merged_df = start_migr_adults.merge(start_migr_juv, how ='outer')
+    start_migr_juv['group'] = 'juveniles'
+    merged_df = start_migr_adults.merge(start_migr_juv, how ='outer')
     #individuals_dep_dates = individuals.loc[(individuals['Year'] == 2011) & (individuals['Country'] == 'CH') & (individuals['ID'] != '3RR')][['ID', 'Juv', 'j_win_dep']]
-    #merged_df.to_csv(sys.argv[3], index = False)
-    #print('juv', start_migr_juv)
-    #print('adults', start_migr_adults)
+    merged_df.to_csv(sys.argv[3], index = False)
+    # Count number of stopovers for adults and juveniles 
+    print('sample size adults:', data_adults['RING'].nunique())
+    print('sample size juv:', data_juv['RING'].nunique())
+    ad_number_stop = calculate_stopover_number(data_adults)
+    juv_number_stop = calculate_stopover_number(data_juv)
 
     # t-tests between first and second track of individuals with repeated tracks
     individuals_repeated_first_y_aut = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 1)]
@@ -318,7 +343,7 @@ def main():
     (individuals['RING'] != '4A99317') & (individuals['RING'] != '4A99647')]
     individuals_repeated_second_y_spr = individuals.loc[(individuals['repeated'] == 1) & (individuals['rep_year'] == 2) & (individuals['RING'] != '4A99312') &
     (individuals['RING'] != '4A99317') & (individuals['RING'] != '4A99647')]
-    t_test_phenology(individuals_repeated_first_y_spr, individuals_repeated_second_y_spr)
+    #t_test_phenology(individuals_repeated_first_y_aut, individuals_repeated_second_y_aut)
 
     # t-test between adults and juveniles
     # Individual with just autumn migration and no spring migration is individual with ring B366688
@@ -337,7 +362,7 @@ def main():
     second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
     data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
    
-    #all_birds_map(individuals, f'{season}_map_repeated_tracks_wintering_37', season)
+    #all_birds_map(individuals, f'{season}_map_repeated_tracks_wintering_legend', season)
 
 
 if __name__ == "__main__":
