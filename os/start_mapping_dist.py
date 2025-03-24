@@ -225,7 +225,7 @@ def all_birds_map(data, save_fig, season):
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     #data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
     #data = data.loc[(data['pop_ch_2011_{season}'] == 1)]
-    #data = data.loc[data['season'] == season]
+    data = data.loc[data['season'] == season]
     # For maps of individuals with repeated tracks
     data = data.loc[(data['repeated'] == 1)] # column 'repeated' for wintering map, 'repeated_tracks' for all the others
     # These individuals don't have wintering that is long enough:
@@ -243,7 +243,8 @@ def all_birds_map(data, save_fig, season):
     #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
-    bird_id = data['RING'].unique() # column 'ID' for all maps, column 'RING' for wintering map
+    data = data.loc[data['RING'] == '5A27815'] # for when I only want the map of individual 5A27815
+    bird_id = data['ID'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
     # Color dictionary for individuals with repated tracks
     color_dict = {'5GN':'aquamarine', '1RH':'aquamarine', '3SP':'yellow','1UP':'yellow', '5GD':'fuchsia','2EU':'fuchsia','3SS':'blue','5SU':'blue',
@@ -253,8 +254,8 @@ def all_birds_map(data, save_fig, season):
     ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
     for bird in bird_id:
         try:
-            x = data.loc[(data['RING'] == bird), 'modelon']
-            y = data.loc[(data['RING'] == bird), 'modelat']
+            x = data.loc[(data['ID'] == bird), 'modelon']
+            y = data.loc[(data['ID'] == bird), 'modelat']
             #x2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelon']
             #y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
             #x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
@@ -262,9 +263,11 @@ def all_birds_map(data, save_fig, season):
             #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
             #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
             # ccrs.PlateCarree() to use dictionary for colors: color = color_dict[bird]
-            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
-            #ax.plot(x2,y2,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
-            ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
+            # This is for wintering
+            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
+            # This is for repeated tracks
+            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
+            #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
         except ValueError: # raised when there is a NaN value maybe?
             pass
     #plt.legend(fontsize='small', loc="upper left")
@@ -362,7 +365,7 @@ def main():
     second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
     data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
    
-    #all_birds_map(individuals, f'{season}_map_repeated_tracks_wintering_legend', season)
+    all_birds_map(data, f'{season}_map_repeated_tracks_only_one_indiv', season)
 
 
 if __name__ == "__main__":
