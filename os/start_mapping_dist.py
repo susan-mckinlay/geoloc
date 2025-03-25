@@ -184,7 +184,7 @@ def get_adults_with_compl_migr(data, individuals):
 
 
 def setting_up_the_map(ax):
-    fname = os.path.join('/Users/susanellenmckinlay/Documents/python/woodcock/input_files/tif_files/', 'HYP_HR_SR_W.tif')
+    fname = os.path.join('/Users/susanmckinlay/Documents/python/woodcock/input_files/tif_files/', 'HYP_HR_SR_W.tif')
     SOURCE = 'Natural Earth'
     LICENSE = 'public domain'
     source_proj = ccrs.PlateCarree()
@@ -225,7 +225,7 @@ def all_birds_map(data, save_fig, season):
                 ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     #data = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data[f'adults_{season}_compl_migr'] == 1)]
     #data = data.loc[(data['pop_ch_2011_{season}'] == 1)]
-    data = data.loc[data['season'] == season]
+    #data = data.loc[data['season'] == season] # not for wintering
     # For maps of individuals with repeated tracks
     data = data.loc[(data['repeated'] == 1)] # column 'repeated' for wintering map, 'repeated_tracks' for all the others
     # These individuals don't have wintering that is long enough:
@@ -243,19 +243,67 @@ def all_birds_map(data, save_fig, season):
     #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
     #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
-    data = data.loc[data['RING'] == '5A27815'] # for when I only want the map of individual 5A27815
-    bird_id = data['ID'].unique() # column 'ID' for all maps, column 'RING' for wintering map
+    #data = data.loc[data['RING'] == '5A27815'] # for when I only want the map of individual 5A27815
+    bird_id = data['RING'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
+    # Prepare error bars
+    xerr_lower = data['lcllat']  # Lower bound errors for longitude (for each bird)
+    print(xerr_lower)
+    xerr_upper = data['ucllat']  # Upper bound errors for longitude (for each bird)
+    yerr_lower = data['lcllon']  # Lower bound errors for latitude (for each bird)
+    yerr_upper = data['ucllon'] # Upper bound errors for longitude (for each bird)
     # Color dictionary for individuals with repated tracks
     color_dict = {'5GN':'aquamarine', '1RH':'aquamarine', '3SP':'yellow','1UP':'yellow', '5GD':'fuchsia','2EU':'fuchsia','3SS':'blue','5SU':'blue',
     '5HC':'red','5PD':'red','1ST':'orange','3ST':'orange','3RD':'lawngreen','1YD':'lawngreen','1RZ':'darkviolet','3RM':'darkviolet'}
     #print(data_first_year['RING'].unique())
     # I need to choose a proper set of colors
     ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
+    # Loop through each bird ID and its locations
+    idx = 0  # This index will be used to loop through the error bounds
     for bird in bird_id:
         try:
-            x = data.loc[(data['ID'] == bird), 'modelon']
-            y = data.loc[(data['ID'] == bird), 'modelat']
+            #y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
+            #x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
+            #y = data_adults.loc[data_adults['ID'] == bird, 'modelat']
+            #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
+            #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
+            # ccrs.PlateCarree() to use dictionary for colors: color = color_dict[bird]
+            # This is for wintering
+            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
+            # This is for repeated tracks
+            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
+            #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
+            # Get longitude (x) and latitude (y) for the current bird (assuming two locations per bird)
+            bird_data = data.loc[data['RING'] == bird]
+            x = bird_data['modelon'].values  # Longitude values for the bird
+            y = bird_data['modelat'].values  # Latitude values for the bird
+            # Error bars for wintering
+            # Get lower and upper bounds for longitude and latitude (as coordinates)
+            lclon = bird_data['lcllon'].values
+            ullon = bird_data['ucllon'].values
+            lclat = bird_data['lcllat'].values
+            ullat = bird_data['ucllat'].values
+            # Convert absolute coordinates to relative error bounds
+            xerr_lower = np.abs(x - lclon)
+            xerr_upper = np.abs(ullon - x)
+            yerr_lower = np.abs(y - lclat)
+            yerr_upper = np.abs(ullat - y)
+            print(f'Number {idx}: x {x} - lclon {lclon} = {xerr_lower} and ullon {ullon} - x {x} = {xerr_upper}. y {y} - lclat {lclat} = {yerr_lower}. ullat {ullat} - y {y} = {yerr_upper}\n')
+            # Combine lower and upper bounds into correct format for errorbar
+            xerr = [xerr_lower, xerr_upper]  # Asymmetric x-error
+            yerr = [yerr_lower, yerr_upper]  # Asymmetric y-error
+
+            print('len(x) is:', len(x),'number', idx, 'this is the bird:', bird, 'and these are the errors:', xerr, yerr, '\n')
+            # Add asymmetric error bars for each point
+            # Add asymmetric error bars for each point
+            ax.errorbar(
+            x, y,
+            xerr=xerr, yerr=yerr,
+            fmt='o', label = bird, ecolor='black', markersize = 12,
+            elinewidth=1, capsize=0, transform=ccrs.PlateCarree()
+            )
+            # Increment idx **after** each location
+            idx += len(x)
             #x2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelon']
             #y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
             #x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
@@ -266,9 +314,11 @@ def all_birds_map(data, save_fig, season):
             # This is for wintering
             #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
             # This is for repeated tracks
-            ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
+            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
             #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
-        except ValueError: # raised when there is a NaN value maybe?
+            # Update the index for the next location
+        except KeyError as e: # raised when there is a NaN value maybe?
+            print(f"Data for {bird} not found. KeyError: {e}")
             pass
     #plt.legend(fontsize='small', loc="upper left")
     plt.savefig('output_files/images/'+save_fig+'.png', dpi=500, format='jpg', bbox_inches="tight")
@@ -317,9 +367,8 @@ def main():
     for name, group in data.groupby(['ID','year']):
         d['group_' + str(name)] = group  # group is a dataframe containing information about ONLY ONE BIRD
         group = add_distance_in_dataframe(group)
-    new_df = pd.DataFrame([])
-    for key in d:
-        new_df = new_df.append(d[key])
+    # Use pd.concat to efficiently combine all the groups
+    new_df = pd.concat(d.values(), ignore_index=True)
     season = 'spr'
     data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['pop_ch_2011_'+season] == 1)] #& (data['repeated_tracks'] == 1)
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
@@ -365,7 +414,7 @@ def main():
     second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
     data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
    
-    all_birds_map(data, f'{season}_map_repeated_tracks_only_one_indiv', season)
+    all_birds_map(individuals, f'{season}_map_test', season)
 
 
 if __name__ == "__main__":
