@@ -29,6 +29,7 @@ import geopy.distance
 import warnings
 import one_way_dist
 import scipy.stats as stats
+import matplotlib.patches as mpatches
 
 # Fixing the progressive number column
 def fix_prog_tot_col(data):
@@ -208,7 +209,7 @@ def all_birds_map(data, save_fig, season):
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
     # Set the background of the map; extent: 40.0 for spring migration
-    ax.set_extent((-20.0, 37.0, 55.0, -30.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    ax.set_extent((-20.0, 37.0, 55.0, -33.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -230,49 +231,36 @@ def all_birds_map(data, save_fig, season):
     data = data.loc[(data['repeated'] == 1)] # column 'repeated' for wintering map, 'repeated_tracks' for all the others
     # These individuals don't have wintering that is long enough:
     data = data.loc[(data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
-    
     # These individuals only have double autumn migration:
     #data = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
     #data_first_year = data.loc[data['rep_year_first'] == 1]
     #data_second_year = data.loc[data['rep_year_second'] == 1]
-    #data = data.loc[(data['prog_number'] != 23971) & (data['prog_number'] != 23972) & (data['prog_number'] != 10455) & (data['prog_number'] != 10456)] #10455
-    #data_adults = data.loc[data['pop_ch_2011_'+season] == 1]
-    #data_juv = data.loc[(data['Juv'] == 1)]
-    # & (data['Juv'] == 1)]
-    # Drop NaN values in modelat and modelon columns
-    #data = data.drop_duplicates(subset=['modelat', 'modelon'], keep='last')
-    #& (data['stationary'] == False) & (data['typeofstopover'] == 'migration')]
     # Set up the tracks per individual that will be represented on the map
-    #data = data.loc[data['RING'] == '5A27815'] # for when I only want the map of individual 5A27815
     bird_id = data['RING'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
+    # Add a row with values only for specific columns
+    data.loc[len(data)] = {'modelat': -29.420086603577, 'modelon': 30.5620939457841, 'lcllon': 28.621862, 
+                           'ucllon': 30.872964, 'lcllat': -29.446047, 'ucllat': -28.525724, 'RING': 'B348329'}
     # Prepare error bars
     xerr_lower = data['lcllat']  # Lower bound errors for longitude (for each bird)
-    print(xerr_lower)
     xerr_upper = data['ucllat']  # Upper bound errors for longitude (for each bird)
     yerr_lower = data['lcllon']  # Lower bound errors for latitude (for each bird)
     yerr_upper = data['ucllon'] # Upper bound errors for longitude (for each bird)
     # Color dictionary for individuals with repated tracks
     color_dict = {'5GN':'aquamarine', '1RH':'aquamarine', '3SP':'yellow','1UP':'yellow', '5GD':'fuchsia','2EU':'fuchsia','3SS':'blue','5SU':'blue',
     '5HC':'red','5PD':'red','1ST':'orange','3ST':'orange','3RD':'lawngreen','1YD':'lawngreen','1RZ':'darkviolet','3RM':'darkviolet'}
+    color_dict_winter = {'4A99312':'aquamarine', '4A99312':'aquamarine', '4A99317':'yellow','4A99317':'yellow', '4A99647':'fuchsia','4A99647':'fuchsia','5A27815':'blue','5A27815':'blue',
+    '6A49176':'red','6A49176':'red','B348042':'orange','B348042':'orange','B348329':'lawngreen','B348329':'lawngreen','B348767':'darkviolet','B348767':'darkviolet'}
     #print(data_first_year['RING'].unique())
     # I need to choose a proper set of colors
     ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
+    # Overlay gray diagonal stripes using a patch
+    circle = mpatches.Circle((30.5620939457841, -29.420086603577), 1, transform=ccrs.PlateCarree(),
+                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
     # Loop through each bird ID and its locations
     idx = 0  # This index will be used to loop through the error bounds
     for bird in bird_id:
         try:
-            #y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
-            #x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
-            #y = data_adults.loc[data_adults['ID'] == bird, 'modelat']
-            #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
-            #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
-            # ccrs.PlateCarree() to use dictionary for colors: color = color_dict[bird]
-            # This is for wintering
-            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
-            # This is for repeated tracks
-            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
-            #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
             # Get longitude (x) and latitude (y) for the current bird (assuming two locations per bird)
             bird_data = data.loc[data['RING'] == bird]
             x = bird_data['modelon'].values  # Longitude values for the bird
@@ -292,31 +280,19 @@ def all_birds_map(data, save_fig, season):
             # Combine lower and upper bounds into correct format for errorbar
             xerr = [xerr_lower, xerr_upper]  # Asymmetric x-error
             yerr = [yerr_lower, yerr_upper]  # Asymmetric y-error
-
             print('len(x) is:', len(x),'number', idx, 'this is the bird:', bird, 'and these are the errors:', xerr, yerr, '\n')
             # Add asymmetric error bars for each point
             # Add asymmetric error bars for each point
             ax.errorbar(
             x, y,
             xerr=xerr, yerr=yerr,
-            fmt='o', label = bird, ecolor='black', markersize = 12,
+            fmt='o', color = color_dict_winter[bird], ecolor='black', markersize = 12,
             elinewidth=1, capsize=0, transform=ccrs.PlateCarree()
             )
+            # Add gray patch for furthest point of individual B348329
+            ax.add_patch(circle)
             # Increment idx **after** each location
             idx += len(x)
-            #x2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelon']
-            #y2 = data_second_year.loc[(data_second_year['ID'] == bird), 'modelat']
-            #x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
-            #y = data_adults.loc[data_adults['ID'] == bird, 'modelat']
-            #x2 = data_juv.loc[(data_juv['ID'] == bird), 'modelon']
-            #y2 = data_juv.loc[(data_juv['ID'] == bird), 'modelat']
-            # ccrs.PlateCarree() to use dictionary for colors: color = color_dict[bird]
-            # This is for wintering
-            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, label = bird) #color = 'orchid') # label = bird), color = 'darkslategrey' for repeated tracks
-            # This is for repeated tracks
-            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color_dict[bird]) #, label = bird) , color = 'firebrick' for repeated tracks
-            #ax.plot(x,y,'.',transform=ccrs.Geodetic(), label = bird, c = 'black', zorder = 1)
-            # Update the index for the next location
         except KeyError as e: # raised when there is a NaN value maybe?
             print(f"Data for {bird} not found. KeyError: {e}")
             pass
@@ -344,7 +320,7 @@ def calculate_stopover_number(data_adults):
 
 def main():
     if len(sys.argv) < 1:
-        exit('python3.9 os/start_mapping_dist.py output_files/tracks_with_dist.csv input_files/individuals.xlsx output_files/random_loc_5LK.csv')
+        exit('python3.13 os/start_mapping_dist.py output_files/tracks_with_dist.csv input_files/individuals.xlsx output_files/random_loc_5LK.csv')
     pd.set_option('display.max_rows', None)
     warnings.filterwarnings("ignore")
     # This is for original track.csv file
