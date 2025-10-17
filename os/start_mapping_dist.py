@@ -180,7 +180,6 @@ def get_adults_with_compl_migr(data, individuals):
     data['pop_it_1_2012_spr'] = np.where(data['ID'].isin(pop_it_1_2012_spr), 1, 0)
     data['pop_it_1_2012_aut'] = np.where(data['ID'].isin(pop_it_1_2012_aut), 1, 0)
 
-    #print('Juveniles!!!\n', individuals.loc[(individuals['Juv'] == 1)].groupby(['Year','Country','Pop'])['ID'].unique().reset_index())
     return data
 
 
@@ -229,35 +228,23 @@ def all_birds_map(data, save_fig, season):
                 #ax.text(x, y, i, color='white', size=11, ha='center', va='center', transform=ccrs.PlateCarree())
     # For maps of individuals with repeated tracks
     # column 'repeated' for wintering map, 'repeated_tracks' for all the others
-    # These individuals don't have wintering that is long enough:
+    # These individuals with repeated tracks don't have wintering that is long enough:
     #data = data.loc[(data['RING'] != '4A99317')& (data['RING'] != '4A99647')]
-    # These individuals only have double autumn migration so exclude them for spring migration
+    # These three individuals only have double autumn migration so exclude them for spring migration
     #data = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317') & (data['RING'] != '4A99647')]
     # For autumn migration of repeated tracks
     #data = data.loc[((data['Country']== 'CH') | (data['Country'] == 'IT')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)]
     # For spring migration of repeated tracks (only N population)
     #data = data.loc[((data['Country']== 'CH')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)]
     data = data.loc[data['season'] == season]
-    # Wintering maps of juveniles and adults
     data_adults = data.loc[(data['Country']== 'CH') & (data['Year'] == 2011) & (data['Juv'] == 0)]
     data_juv = data.loc[(data['Juv'] == 1)]
-    #data = data.loc[(data['Country']== 'CH') & (data['Year'] == 2011) & (data['season'] == 'aut')]
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['ID'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
-    # Prepare error bars
-    #xerr_lower = data['lcllat']  # Lower bound errors for longitude (for each bird)
-    #xerr_upper = data['ucllat']  # Upper bound errors for longitude (for each bird)
-    #yerr_lower = data['lcllon']  # Lower bound errors for latitude (for each bird)
-    #yerr_upper = data['ucllon'] # Upper bound errors for longitude (for each bird)
     # Color dictionary for individuals with repeated tracks for migration maps
     color_dict_migr = {'5GN':'aquamarine', '1RH':'aquamarine', '3SP':'yellow','1UP':'yellow', '5GD':'fuchsia','2EU':'fuchsia','3SS':'blue','5SU':'blue',
     '5HC':'red','5PD':'red','1ST':'orange','3ST':'orange','3RD':'lawngreen','1YD':'lawngreen','1RZ':'darkviolet','3RM':'darkviolet'}
-    color_dict_winter = {'4A99312':'aquamarine', '4A99312':'aquamarine', '4A99317':'yellow','4A99317':'yellow', '4A99647':'fuchsia','4A99647':'fuchsia','5A27815':'blue','5A27815':'blue',
-    '6A49176':'red','6A49176':'red','B348042':'orange','B348042':'orange','B348329':'lawngreen','B348329':'lawngreen','B348767':'darkviolet','B348767':'darkviolet'}
-    color_dict_wint_juv = {'B372448': 'darkviolet', 'B372516':'darkviolet','B372559':'darkviolet','B372578':'darkviolet', 'B366145':'hotpink', 'B366330': 'hotpink',
-                           'B366453':'hotpink', 'B366467':'hotpink','B348042':'hotpink', 'B348329':'hotpink','B366588':'hotpink', 'B366688':'hotpink','B366706':'hotpink',
-                           'B366737':'hotpink','B372131':'hotpink','B348767':'hotpink'}
     # I need to choose a proper set of colors
     ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
 
@@ -266,23 +253,31 @@ def all_birds_map(data, save_fig, season):
     # First plot the gray tracks (birds not in the color dictionary)
     # Then plot the colored tracks (birds with specific colors)
     for bird in bird_id:
-        if bird in color_dict_migr:
+        #if bird in color_dict_migr:
+            # For adults with repeated tracks
             # For spring
             #data_rep = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317') & (data['RING'] != '4A99647') & (data['repeated'] == 1)] # remove three individuals with rep. tracks but no spring migration
             # For autumn
-            data_rep = data.loc[(data['repeated'] == 1)]
-            x = data_rep.loc[data_rep['ID'] == bird, 'modelon']
-            y = data_rep.loc[data_rep['ID'] == bird, 'modelat']
-            ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color=color_dict_migr[bird], zorder=3)
-    for bird in bird_id:
-        if bird not in color_dict_migr:
+            #data_rep = data.loc[(data['repeated'] == 1)]
+            #x = data_rep.loc[data_rep['ID'] == bird, 'modelon']
+            #y = data_rep.loc[data_rep['ID'] == bird, 'modelat']
+            #ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color=color_dict_migr[bird], zorder=3)
+            # For juveniles and adults
+            x = data_adults.loc[data_adults['ID'] == bird, 'modelon']
+            y = data_adults.loc[data_adults['ID'] == bird, 'modelat']
+            ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color='hotpink', zorder=3)
+            x2 = data_juv.loc[data_juv['ID'] == bird, 'modelon']
+            y2 = data_juv.loc[data_juv['ID'] == bird, 'modelat']
+            ax.plot(x2, y2, '-', transform=ccrs.Geodetic(), linewidth=1.5, color='darkviolet', zorder=3)
+    for bird in bird_id: # This part is only for maps with adults with repeated tracks
+        if bird not in color_dict_migr: # to represent all the other adults with single tracks in light gray
             # For spring
             data = data.loc[((data['Country']== 'CH')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)] # only consider N pop for individuals with just one track
             # For autumn
             #data = data.loc[((data['Country']== 'CH') | (data['Country'] == 'IT')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)]
             x = data.loc[data['ID'] == bird, 'modelon']
             y = data.loc[data['ID'] == bird, 'modelat']
-            ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color='lightgray', zorder=2)
+            #ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color='lightgray', zorder=2)
     plt.savefig('output_files/images/'+save_fig+'.png', dpi=500, format='jpg', bbox_inches="tight")
     plt.show()
 
@@ -309,48 +304,34 @@ def all_wintering_birds_map(data, save_fig):
     # For maps of individuals with repeated tracks
     # column 'repeated' for wintering map, 'repeated_tracks' for all the others
     # These individuals don't have wintering that is long enough: in the meantime select individuals with repeated tarcks
-    data = data.loc[(data['RING'] != '4A99317')& (data['RING'] != '4A99647') & (data['repeated'] == 1)]
-    # These individuals only have double autumn migration so exclude them for spring migration
-    #data = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317') & (data['RING'] != '4A99647')]
-    # For autumn migration of repeated tracks
-    #data = data.loc[((data['Country']== 'CH') | (data['Country'] == 'IT')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)]
-    # For spring migration of repeated tracks (only N population)
-    #data = data.loc[((data['Country']== 'CH')) & ((data['Year'] == 2011) | (data['Year'] == 2010)) & (data['Juv'] == 0)]
-    #data = data.loc[data['season'] == 'aut']
+    #data = data.loc[(data['RING'] != '4A99317')& (data['RING'] != '4A99647') & (data['repeated'] == 1)]
     # Wintering maps of juveniles and adults
+    data = data.loc[(data['Country']== 'CH') & (data['Year'] == 2011)]
     data_adults = data.loc[(data['Country']== 'CH') & (data['Year'] == 2011) & (data['Juv'] == 0)]
     data_juv = data.loc[(data['Juv'] == 1)]
-    #data = data.loc[(data['Country']== 'CH') & (data['Year'] == 2011) & (data['season'] == 'aut')]
     # Set up the tracks per individual that will be represented on the map
     bird_id = data['RING'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
     # Add a row with values only for specific columns. In this case I'm adding the furthest point migrated to of individual B348329 in the second year it's been tracked
-    # 
     #data.loc[len(data)] = {'modelat': -29.420086603577, 'modelon': 30.5620939457841, 'lcllon': 28.621862, 
                            #'ucllon': 30.872964, 'lcllat': -29.446047, 'ucllat': -28.525724, 'RING': 'B348329'}
     # 3RD secondary non-breeding site (2nd year)
-    data.loc[len(data)] = {'modelat': -28.4458061151726, 'modelon': 23.885170372317, 'lcllon': 23.870271, 
-                           'ucllon': 23.887178, 'lcllat': -28.48571, 'ucllat': -28.43984, 'RING': 'B348329'}
+    #data.loc[len(data)] = {'modelat': -28.4458061151726, 'modelon': 23.885170372317, 'lcllon': 23.870271, 
+                           #'ucllon': 23.887178, 'lcllat': -28.48571, 'ucllat': -28.43984, 'RING': 'B348329'}
     # 1YD secondary non-breeding site (1st year)
-    data.loc[len(data)] = {'modelat': -13.6086314343264, 'modelon': 20.0110896244389, 'lcllon': 19.1894266541378, 
-                           'ucllon': 20.0422004071074, 'lcllat': -13.86642987, 'ucllat': -4.66660844999999, 'RING': 'B348329'}
+    #data.loc[len(data)] = {'modelat': -13.6086314343264, 'modelon': 20.0110896244389, 'lcllon': 19.1894266541378, 
+                           #'ucllon': 20.0422004071074, 'lcllat': -13.86642987, 'ucllat': -4.66660844999999, 'RING': 'B348329'}
     # 3ST secondary non-breeding site (2nd year), the first year this individual just had one main non-breeding site
-    data.loc[len(data)] = {'modelat': 11.6434304049965, 'modelon': -4.59569891612361, 'lcllon': -4.594925, 
-                           'ucllon': -2.948896, 'lcllat': 11.6409, 'ucllat': 12.309, 'RING': 'B348042'} # B348042
+    #data.loc[len(data)] = {'modelat': 11.6434304049965, 'modelon': -4.59569891612361, 'lcllon': -4.594925, 
+                           #'ucllon': -2.948896, 'lcllat': 11.6409, 'ucllat': 12.309, 'RING': 'B348042'} # B348042
     # Itinerant juvenile: 3CX
-    #data.loc[len(data)] = {'modelat': 7.31920389397654, 'modelon': -5.75728189757037, 'lcllon': -6.0200309, 
-                           #'ucllon': -1.6555623, 'lcllat': 6.8833396, 'ucllat': 10.52565, 'ID': '3CX'}
+    data.loc[len(data)] = {'modelat': 7.31920389397654, 'modelon': -5.75728189757037, 'lcllon': -6.0200309, 
+                           'ucllon': -1.6555623, 'lcllat': 6.8833396, 'ucllat': 10.52565, 'RING': 'B372448'}
     # Itinerant juvenile: 5IK
-    #data.loc[len(data)] = {'modelat': 3.22704049285976, 'modelon': 15.8452234999454, 'lcllon': 15.799831, 
-                           #'ucllon': 16.364876, 'lcllat': 3.1825769, 'ucllat': 4.1622705, 'ID': '3CX'}
-    # Prepare error bars
-    #xerr_lower = data['lcllat']  # Lower bound errors for longitude (for each bird)
-    #xerr_upper = data['ucllat']  # Upper bound errors for longitude (for each bird)
-    #yerr_lower = data['lcllon']  # Lower bound errors for latitude (for each bird)
-    #yerr_upper = data['ucllon'] # Upper bound errors for longitude (for each bird)
+    data.loc[len(data)] = {'modelat': 3.22704049285976, 'modelon': 15.8452234999454, 'lcllon': 15.799831, 
+                           'ucllon': 16.364876, 'lcllat': 3.1825769, 'ucllat': 4.1622705, 'RING': 'B372516'}
+  
     # Color dictionary for individuals with repeated tracks for migration maps
-    color_dict_migr = {'5GN':'aquamarine', '1RH':'aquamarine', '3SP':'yellow','1UP':'yellow', '5GD':'fuchsia','2EU':'fuchsia','3SS':'blue','5SU':'blue',
-    '5HC':'red','5PD':'red','1ST':'orange','3ST':'orange','3RD':'lawngreen','1YD':'lawngreen','1RZ':'darkviolet','3RM':'darkviolet'}
     color_dict_winter = {'4A99312':'aquamarine', '4A99312':'aquamarine', '4A99317':'yellow','4A99317':'yellow', '4A99647':'fuchsia','4A99647':'fuchsia','5A27815':'blue','5A27815':'blue',
     '6A49176':'red','6A49176':'red','B348042':'orange','B348042':'orange','B348329':'lawngreen','B348329':'lawngreen','B348767':'darkviolet','B348767':'darkviolet'}
     color_dict_wint_juv = {'B372448': 'darkviolet', 'B372516':'darkviolet','B372559':'darkviolet','B372578':'darkviolet', 'B366145':'hotpink', 'B366330': 'hotpink',
@@ -365,15 +346,18 @@ def all_wintering_birds_map(data, save_fig):
     # 23.885170372317, -28.4458061151726
     # Individual 4A99317 is itinerant just the second year (3SP): -7.91679488750454, 9.25308829806276
     # Individual B348042 is itinerant just the second year (3ST): -4.59569891612361, 11.6434304049965
-    circle_one = mpatches.Circle((23.885170372317, -28.4458061151726), 1, transform=ccrs.PlateCarree(),
-                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
-    circle_two = mpatches.Circle((20.0110896244389, -13.6086314343264), 1, transform=ccrs.PlateCarree(),
-                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
-    circle_three = mpatches.Circle((-4.59569891612361, 11.6434304049965), 1, transform=ccrs.PlateCarree(),
-                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    #circle_one = mpatches.Circle((23.885170372317, -28.4458061151726), 1, transform=ccrs.PlateCarree(),
+                         #edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    #circle_two = mpatches.Circle((20.0110896244389, -13.6086314343264), 1, transform=ccrs.PlateCarree(),
+                         #edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    #circle_three = mpatches.Circle((-4.59569891612361, 11.6434304049965), 1, transform=ccrs.PlateCarree(),
+                         #edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    circle_juv_one = mpatches.Circle((-5.75728189757037, 7.31920389397654), 1, transform=ccrs.PlateCarree(),
+                         edgecolor='gainsboro', facecolor='none', hatch='/////', zorder = 5) # linewidth = 1)
+    circle_juv_two = mpatches.Circle((15.8452234999454, 3.22704049285976), 1, transform=ccrs.PlateCarree(),
+                         edgecolor='gainsboro', facecolor='none', hatch='/////', zorder = 5) # linewidth = 1)
     # Loop through each bird ID and its locations
     idx = 0  # This index will be used to loop through the error bounds
- 
     # For wintering maps
     for bird in bird_id:
         try:
@@ -405,13 +389,11 @@ def all_wintering_birds_map(data, save_fig):
             print('len(x) is:', len(x),'number', idx, 'this is the bird:', bird, 'and these are the errors:', xerr, yerr, '\n')
             # Add asymmetric error bars for each point
             # Add asymmetric error bars for each point
-            ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', color = color_dict_winter[bird], ecolor='white', markersize = 10, elinewidth=1.5, capsize=0, transform=ccrs.PlateCarree() )
+            ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', color = color_dict_wint_juv[bird], ecolor='white', markersize = 10, elinewidth=1.5, capsize=0, transform=ccrs.PlateCarree() )
             # Add gray patch for furthest point of individual B348329 for wintering of individuals with repated tracks
-            ax.add_patch(circle_one)
-            ax.add_patch(circle_two)
-            ax.add_patch(circle_three)
-            # For migration maps
-            #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color) # for juv-ad: color_dict_wint_juv[bird]
+            ax.add_patch(circle_juv_one)
+            ax.add_patch(circle_juv_two)
+            #ax.add_patch(circle_three)
             # Increment idx **after** each location
             idx += len(x)
         except KeyError as e: # raised when there is a NaN value maybe?
@@ -465,7 +447,7 @@ def main():
         group = add_distance_in_dataframe(group)
     # Use pd.concat to efficiently combine all the groups
     new_df = pd.concat(d.values(), ignore_index=True)
-    season = 'aut'
+    season = 'spr'
     data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['pop_ch_2011_'+season] == 1)] #& (data['repeated_tracks'] == 1)
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
     start_migr_adults['group'] = 'adults'
@@ -507,8 +489,8 @@ def main():
     second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
     data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
     # individuals for wintering
-    #all_birds_map(data, f'{season}_map_repeated_autumn_bigger_lat_lon', season)
-    all_wintering_birds_map(individuals, f'{season}_map_repeated_wintering_bigger_lat_lon')
+    all_birds_map(data, f'{season}_map_juv_ad_bigger_lat_lon', season)
+    #all_wintering_birds_map(individuals, f'{season}_winter_map_juv_ad_bigger_lat_lon')
 
 
 if __name__ == "__main__":
