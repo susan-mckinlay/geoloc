@@ -189,13 +189,15 @@ def setting_up_the_map(ax):
     SOURCE = 'Natural Earth'
     LICENSE = 'public domain'
     source_proj = ccrs.PlateCarree()
-    ax.imshow(imread(fname), origin='upper', transform=source_proj, extent=[-180, 180, -90, 90])
+    ax.imshow(imread(fname), origin='upper', transform=source_proj, extent=[-180, 180, -90, 90], alpha = 0.9)
     #ax.add_feature(land_50m, edgecolor='gray')
     ax.add_feature(cfeature.LAND)
     ax.add_feature(cfeature.OCEAN)
     #ax.add_feature(cfeature.COASTLINE)
     ax.add_feature(cfeature.BORDERS, edgecolor='gray')
     grid_lines = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels = True, zorder = 1)
+    grid_lines.xlabel_style = {'size': 14, 'weight': 'bold', 'color': 'black'}
+    grid_lines.ylabel_style = {'size': 14, 'weight': 'bold', 'color': 'black'}
     grid_lines.top_labels = False
     grid_lines.right_labels = False
     # I am tring to highlight the parallel N 17
@@ -266,9 +268,9 @@ def all_birds_map(data, save_fig, season):
     for bird in bird_id:
         if bird in color_dict_migr:
             # For spring
-            data_rep = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317') & (data['RING'] != '4A99647') & (data['repeated'] == 1)] # remove three individuals with rep. tracks but no spring migration
+            #data_rep = data.loc[(data['RING'] != '4A99312') & (data['RING'] != '4A99317') & (data['RING'] != '4A99647') & (data['repeated'] == 1)] # remove three individuals with rep. tracks but no spring migration
             # For autumn
-            #data_rep = data.loc[(data['repeated'] == 1)]
+            data_rep = data.loc[(data['repeated'] == 1)]
             x = data_rep.loc[data_rep['ID'] == bird, 'modelon']
             y = data_rep.loc[data_rep['ID'] == bird, 'modelat']
             ax.plot(x, y, '-', transform=ccrs.Geodetic(), linewidth=1.5, color=color_dict_migr[bird], zorder=3)
@@ -288,8 +290,8 @@ def all_wintering_birds_map(data, save_fig):
     plt.figure(figsize=(30,10))
     ax = plt.axes(projection= ccrs.PlateCarree())
     ax = setting_up_the_map(ax)
-    # Set the background of the map; extent: 40.0 for spring migration, otherwise 37; default -20
-    ax.set_extent((-20.0, 37.0, 55.0, -35.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
+    # Set the background of the map; extent: 37.0 for spring migration, otherwise 35; default -20
+    ax.set_extent((-20.0, 35.0, 55.0, -35.0), crs=ccrs.PlateCarree()) #(-20.0, 43.0, 55.0, -37.0)
     shpfilename = shpreader.natural_earth(resolution='110m',
                                       category='cultural',
                                       name='admin_0_countries')
@@ -323,8 +325,24 @@ def all_wintering_birds_map(data, save_fig):
     bird_id = data['RING'].unique() # column 'ID' for all maps, column 'RING' for wintering map
     print('total number of birds is', len(bird_id), bird_id)
     # Add a row with values only for specific columns. In this case I'm adding the furthest point migrated to of individual B348329 in the second year it's been tracked
-    data.loc[len(data)] = {'modelat': -29.420086603577, 'modelon': 30.5620939457841, 'lcllon': 28.621862, 
-                           'ucllon': 30.872964, 'lcllat': -29.446047, 'ucllat': -28.525724, 'RING': 'B348329'}
+    # 
+    #data.loc[len(data)] = {'modelat': -29.420086603577, 'modelon': 30.5620939457841, 'lcllon': 28.621862, 
+                           #'ucllon': 30.872964, 'lcllat': -29.446047, 'ucllat': -28.525724, 'RING': 'B348329'}
+    # 3RD secondary non-breeding site (2nd year)
+    data.loc[len(data)] = {'modelat': -28.4458061151726, 'modelon': 23.885170372317, 'lcllon': 23.870271, 
+                           'ucllon': 23.887178, 'lcllat': -28.48571, 'ucllat': -28.43984, 'RING': 'B348329'}
+    # 1YD secondary non-breeding site (1st year)
+    data.loc[len(data)] = {'modelat': -13.6086314343264, 'modelon': 20.0110896244389, 'lcllon': 19.1894266541378, 
+                           'ucllon': 20.0422004071074, 'lcllat': -13.86642987, 'ucllat': -4.66660844999999, 'RING': 'B348329'}
+    # 3ST secondary non-breeding site (2nd year), the first year this individual just had one main non-breeding site
+    data.loc[len(data)] = {'modelat': 11.6434304049965, 'modelon': -4.59569891612361, 'lcllon': -4.594925, 
+                           'ucllon': -2.948896, 'lcllat': 11.6409, 'ucllat': 12.309, 'RING': 'B348042'} # B348042
+    # Itinerant juvenile: 3CX
+    #data.loc[len(data)] = {'modelat': 7.31920389397654, 'modelon': -5.75728189757037, 'lcllon': -6.0200309, 
+                           #'ucllon': -1.6555623, 'lcllat': 6.8833396, 'ucllat': 10.52565, 'ID': '3CX'}
+    # Itinerant juvenile: 5IK
+    #data.loc[len(data)] = {'modelat': 3.22704049285976, 'modelon': 15.8452234999454, 'lcllon': 15.799831, 
+                           #'ucllon': 16.364876, 'lcllat': 3.1825769, 'ucllat': 4.1622705, 'ID': '3CX'}
     # Prepare error bars
     #xerr_lower = data['lcllat']  # Lower bound errors for longitude (for each bird)
     #xerr_upper = data['ucllat']  # Upper bound errors for longitude (for each bird)
@@ -340,8 +358,18 @@ def all_wintering_birds_map(data, save_fig):
                            'B366737':'hotpink','B372131':'hotpink','B348767':'hotpink'}
     # I need to choose a proper set of colors
     ax.set_prop_cycle('color', plt.cm.gist_rainbow(np.linspace(0,1,len(bird_id))))
-    # Overlay gray diagonal stripes using a patch
-    circle = mpatches.Circle((30.5620939457841, -29.420086603577), 1, transform=ccrs.PlateCarree(),
+    # Overlay gray diagonal stripes using a patch for secondary stationary sites during non-breeding
+    # Individual B348329 with first year main non-breeding site in SA and second non-breeding site in Angola (1YD)
+    # 20.0110896244389, -13.6086314343264
+    # Individual B348329 with second year shorter non-breeding site in SA (3RD)
+    # 23.885170372317, -28.4458061151726
+    # Individual 4A99317 is itinerant just the second year (3SP): -7.91679488750454, 9.25308829806276
+    # Individual B348042 is itinerant just the second year (3ST): -4.59569891612361, 11.6434304049965
+    circle_one = mpatches.Circle((23.885170372317, -28.4458061151726), 1, transform=ccrs.PlateCarree(),
+                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    circle_two = mpatches.Circle((20.0110896244389, -13.6086314343264), 1, transform=ccrs.PlateCarree(),
+                         edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
+    circle_three = mpatches.Circle((-4.59569891612361, 11.6434304049965), 1, transform=ccrs.PlateCarree(),
                          edgecolor='dimgray', facecolor='none', hatch='/////', zorder = 5)
     # Loop through each bird ID and its locations
     idx = 0  # This index will be used to loop through the error bounds
@@ -358,6 +386,7 @@ def all_wintering_birds_map(data, save_fig):
             bird_data = data.loc[(data['RING'] == bird)]
             x = bird_data['modelon'].values  # Longitude values for the bird wintering
             y = bird_data['modelat'].values  # Latitude values for the bird wintering
+            print('bird', bird, 'x', x, 'y', y)
             # Error bars for wintering
             # Get lower and upper bounds for longitude and latitude (as coordinates)
             lclon = bird_data['lcllon'].values
@@ -378,7 +407,9 @@ def all_wintering_birds_map(data, save_fig):
             # Add asymmetric error bars for each point
             ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt='o', color = color_dict_winter[bird], ecolor='white', markersize = 10, elinewidth=1.5, capsize=0, transform=ccrs.PlateCarree() )
             # Add gray patch for furthest point of individual B348329 for wintering of individuals with repated tracks
-            ax.add_patch(circle)
+            ax.add_patch(circle_one)
+            ax.add_patch(circle_two)
+            ax.add_patch(circle_three)
             # For migration maps
             #ax.plot(x,y,'-', transform=ccrs.Geodetic(), linewidth = 1.5, color = color) # for juv-ad: color_dict_wint_juv[bird]
             # Increment idx **after** each location
@@ -434,7 +465,7 @@ def main():
         group = add_distance_in_dataframe(group)
     # Use pd.concat to efficiently combine all the groups
     new_df = pd.concat(d.values(), ignore_index=True)
-    season = 'spr'
+    season = 'aut'
     data_adults = data.loc[(data[f'compl_{season}_track'] == 1) & (data['season'] == season) & (data['pop_ch_2011_'+season] == 1)] #& (data['repeated_tracks'] == 1)
     start_migr_adults = calculate_avrg_migr_dep(data_adults, season)
     start_migr_adults['group'] = 'adults'
@@ -476,8 +507,8 @@ def main():
     second_year = individuals.loc[individuals['rep_year'] == 2, 'ID'].unique()
     data['rep_year_second'] = np.where(data['ID'].isin(second_year), 1, 0)
     # individuals for wintering
-    all_birds_map(data, f'{season}_map_repeated_no_country_name', season)
-    #all_wintering_birds_map(individuals, f'{season}_map_repeated_wintering_no_country_name')
+    #all_birds_map(data, f'{season}_map_repeated_autumn_bigger_lat_lon', season)
+    all_wintering_birds_map(individuals, f'{season}_map_repeated_wintering_bigger_lat_lon')
 
 
 if __name__ == "__main__":
